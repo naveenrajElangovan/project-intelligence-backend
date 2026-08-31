@@ -1,0 +1,152 @@
+services:
+  chroma:
+    image: chromadb/chroma:1.5.2
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    volumes:
+      - project-intelligence-chroma:/chroma/chroma
+    networks: ["application"]
+
+  mongodb:
+    image: mongo:8.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${PI_CHAT_MONGODB_ROOT_USERNAME:?set MongoDB username}
+      MONGO_INITDB_ROOT_PASSWORD: ${PI_CHAT_MONGODB_ROOT_PASSWORD:?set MongoDB password}
+    ports:
+      - "127.0.0.1:27018:27017"
+    restart: unless-stopped
+    volumes:
+      - project-intelligence-mongodb-auth:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: ["application"]
+
+  secrets-init:
+    build:
+      context: .
+    image: project-intelligence-backend:0.1.0
+    user: root
+    entrypoint:
+      - /bin/sh
+      - -c
+      - chown -R app:app /var/lib/project-intelligence && chmod 0700 /var/lib/project-intelligence
+    restart: "no"
+    read_only: true
+    volumes:
+      - provider-secrets:/var/lib/project-intelligence
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE", "FOWNER"]
+    security_opt: ["no-new-privileges:true"]
+    network_mode: none
+
+  api:
+    build:
+      context: .
+    image: project-intelligence-backend:0.1.0
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      PI_RAG_SERVICE_URL: ${PI_RAG_RUNTIME_URL:-http://rag:8002}
+      PI_CHAT_MONGODB_URL: ${PI_CHAT_MONGODB_DOCKER_URL:?set authenticated MongoDB URL}
+      # Development only. Production uses Azure Key Vault.
+      PI_LOCAL_SECRET_STORE_PATH: /var/lib/project-intelligence/provider-secrets.json
+      # Development-only: scripts/start_dev_api.sh supplies this from `az login`.
+      # Production must use PI_DATABASE_MANAGED_IDENTITY_CLIENT_ID instead.
+      PI_DATABASE_ACCESS_TOKEN: ${PI_DATABASE_ACCESS_TOKEN:-}
+    ports:
+      - "127.0.0.1:8001:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      secrets-init:
+        condition: service_completed_successfully
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    volumes:
+      - provider-secrets:/var/lib/project-intelligence
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: ["application"]
+
+  ingestion:
+    build:
+      context: ../project-intelligence-ingestion
+    image: project-intelligence-ingestion:0.1.0
+    env_file:
+      - path: ../project-intelligence-ingestion/.env
+        required: true
+    environment:
+      PI_INGEST_CONTROL_PLANE_URL: http://api:8000
+      PI_INGEST_CHROMA_HOST: chroma
+    ports:
+      - "127.0.0.1:8002:8000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: ["application"]
+
+  ingestion-worker:
+    profiles: ["worker"]
+    build:
+      context: ../project-intelligence-ingestion
+      dockerfile: Dockerfile.worker
+    image: project-intelligence-ingestion-worker:0.1.0
+    env_file:
+      - path: ../project-intelligence-ingestion/.env
+        required: true
+    environment:
+      PI_INGEST_CONTROL_PLANE_URL: http://api:8000
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1700
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks: ["application"]
+
+  rag:
+    build:
+      context: ../project-intelligence-rag
+    image: project-intelligence-rag:0.1.0
+    env_file:
+      - path: ../project-intelligence-rag/.env
+        required: true
+    environment:
+      PI_RAG_CHROMA_HOST: chroma
+    ports:
+      - "127.0.0.1:8003:8002"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: ["application"]
+
+networks:
+  application:
+
+volumes:
+  provider-secrets:
+  project-intelligence-mongodb-auth:
+  project-intelligence-chroma:

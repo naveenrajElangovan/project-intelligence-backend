@@ -1,0 +1,38 @@
+# Developer test overlay. Used *with* the release file, never instead of it, so
+# what developers exercise is the same image set that ships:
+#
+#   docker compose -f docker-compose.release.yml -f docker-compose.devtest.yml \
+#     --profile model-seed up -d model-seed
+#   docker compose -f docker-compose.release.yml -f docker-compose.devtest.yml up -d
+#
+# Adds two things and changes nothing else: models delivered as an image instead
+# of a Hugging Face download, and loopback ports for poking at the internals.
+
+services:
+  # Seeds the shared model volume from the pinned models image -- about 2.5 GB
+  # pulled once per machine from your own registry, instead of every developer
+  # downloading the weights from Hugging Face.
+  model-seed:
+    profiles: ["model-seed"]
+    image: ${PI_IMAGE_REGISTRY:?set the registry}/project-intelligence-models:${PI_MODELS_TAG:?set the models tag, e.g. e5-1.0}
+    restart: "no"
+    volumes:
+      - models:/target
+    networks: ["edge"]
+
+  # Loopback only. Enough to curl /health, inspect Chroma, and read the Mongo
+  # conversation store while diagnosing a report.
+  rag:
+    ports:
+      - "127.0.0.1:8003:8002"
+
+  chroma:
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  mongodb:
+    ports:
+      - "127.0.0.1:27018:27017"
+
+volumes:
+  models:

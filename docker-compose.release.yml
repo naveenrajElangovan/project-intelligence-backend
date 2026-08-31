@@ -1,0 +1,167 @@
+# Images-only deployment. No `build:` anywhere, so the server never needs the
+# source. Every image is pulled by immutable tag from PI_IMAGE_REGISTRY.
+#
+#   docker compose -f docker-compose.release.yml pull
+#   docker compose -f docker-compose.release.yml up -d
+#
+# Required on the server: this file, a .env.production per service, and the
+# model volumes populated once by the `model-init` profile.
+
+x-hardening: &hardening
+  restart: unless-stopped
+  read_only: true
+  cap_drop: ["ALL"]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  chroma:
+    image: chromadb/chroma:1.5.2
+    restart: unless-stopped
+    volumes:
+      - chroma:/chroma/chroma
+    expose: ["8000"]
+    networks: ["edge"]
+
+  mongodb:
+    image: mongo:8.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${PI_CHAT_MONGODB_ROOT_USERNAME:?set MongoDB username}
+      MONGO_INITDB_ROOT_PASSWORD: ${PI_CHAT_MONGODB_ROOT_PASSWORD:?set MongoDB password}
+    restart: unless-stopped
+    volumes:
+      - mongodb:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    expose: ["27017"]
+    networks: ["edge"]
+
+  # Only needed when PI_RAG_LLM_PROVIDER=ollama. Leave it out (profile "local-llm"
+  # is not enabled) when the generator is a hosted API, which removes the 6.6 GB
+  # of weights and most of the RAM requirement from the server.
+  ollama:
+    profiles: ["local-llm"]
+    image: ollama/ollama:0.12.3
+    restart: unless-stopped
+    volumes:
+      - ollama:/root/.ollama
+    expose: ["11434"]
+    networks: ["edge"]
+
+  # One-shot. Populates the shared model volume from Hugging Face using the
+  # download scripts already inside the RAG image, so no source is needed:
+  #   docker compose -f docker-compose.release.yml --profile model-init up model-init
+  model-init:
+    profiles: ["model-init"]
+    image: ${PI_IMAGE_REGISTRY:?set the registry}/project-intelligence-rag:${PI_IMAGE_TAG:?set an immutable tag}
+    user: root
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        python -m scripts.download_local_reranker /models/huggingface/bge-reranker-v2-m3 &&
+        python -m scripts.download_local_embedder /models/huggingface/multilingual-e5-large &&
+        chown -R 10001:10001 /models
+    restart: "no"
+    volumes:
+      - models:/models
+    networks: ["edge"]
+
+  api:
+    <<: *hardening
+    image: ${PI_IMAGE_REGISTRY:?set the registry}/project-intelligence-backend:${PI_IMAGE_TAG:?set an immutable tag}
+    env_file:
+      - path: .env.production
+        required: true
+    environment:
+      PI_RAG_SERVICE_URL: http://rag:8002
+      PI_CHAT_MONGODB_URL: ${PI_CHAT_MONGODB_URL:?set the authenticated MongoDB URL}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    # The only port published to the host. Put a TLS terminator in front of it.
+    ports:
+      - "127.0.0.1:8001:8000"
+    networks: ["edge"]
+
+  rag:
+    <<: *hardening
+    image: ${PI_IMAGE_REGISTRY:?set the registry}/project-intelligence-rag:${PI_IMAGE_TAG:?set an immutable tag}
+    env_file:
+      - path: ./env/rag.env.production
+        required: true
+    environment:
+      PI_RAG_CHROMA_HOST: chroma
+      PI_RAG_OLLAMA_BASE_URL: ${PI_RAG_OLLAMA_BASE_URL:-http://ollama:11434}
+      # There is no Metal device on a Linux server. Left at `mps` the reranker
+      # and the query embedder both fail to load.
+      PI_RAG_LOCAL_RERANK_DEVICE: ${PI_RAG_LOCAL_RERANK_DEVICE:-cpu}
+      PI_RAG_LOCAL_EMBEDDING_DEVICE: ${PI_RAG_LOCAL_EMBEDDING_DEVICE:-cpu}
+      PI_RAG_LOCAL_MODELS_PATH: /models/huggingface/bge-reranker-v2-m3
+      PI_RAG_LOCAL_EMBEDDING_PATH: /models/huggingface/multilingual-e5-large
+      HF_HUB_OFFLINE: "1"
+    volumes:
+      - models:/models:ro
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    expose: ["8002"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: ["edge"]
+
+  ingestion:
+    <<: *hardening
+    image: ${PI_IMAGE_REGISTRY:?set the registry}/project-intelligence-ingestion:${PI_IMAGE_TAG:?set an immutable tag}
+    env_file:
+      - path: ./env/ingestion.env.production
+        required: true
+    environment:
+      PI_INGEST_CONTROL_PLANE_URL: http://api:8000
+      PI_INGEST_CHROMA_HOST: chroma
+      PI_INGEST_LOCAL_EMBEDDING_DEVICE: cpu
+      PI_INGEST_LOCAL_EMBEDDING_PATH: /models/huggingface/multilingual-e5-large
+      HF_HUB_OFFLINE: "1"
+    volumes:
+      - models:/models:ro
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    expose: ["8000"]
+    networks: ["edge"]
+
+  ingestion-worker:
+    <<: *hardening
+    profiles: ["worker"]
+    image: ${PI_IMAGE_REGISTRY:?set the registry}/project-intelligence-ingestion-worker:${PI_IMAGE_TAG:?set an immutable tag}
+    env_file:
+      - path: ./env/ingestion.env.production
+        required: true
+    environment:
+      PI_INGEST_CONTROL_PLANE_URL: http://api:8000
+      PI_INGEST_CHROMA_HOST: chroma
+      PI_INGEST_LOCAL_EMBEDDING_DEVICE: cpu
+      PI_INGEST_LOCAL_EMBEDDING_PATH: /models/huggingface/multilingual-e5-large
+      HF_HUB_OFFLINE: "1"
+    volumes:
+      - models:/models:ro
+    tmpfs:
+      - /tmp:size=512m,mode=1700
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+    networks: ["edge"]
+
+networks:
+  edge:
+
+volumes:
+  chroma:
+  mongodb:
+  ollama:
+  models:

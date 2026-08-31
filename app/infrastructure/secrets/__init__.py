@@ -1,0 +1,1 @@
+"""Secret-store adapters."""

@@ -1,0 +1,26 @@
+.env
+.local-secrets.json
+project_intelligence.db
+.env.*
+!.env.example
+!.env.production.example
+.DS_Store
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
+
+# Local SQLite control plane used when Azure SQL is unavailable.
+.local-sql/
+.run/

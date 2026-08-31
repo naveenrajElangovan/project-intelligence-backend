@@ -1,0 +1,29 @@
+{
+  "projectId": "DEMO",
+  "displayName": "Example Retail Platform",
+  "active": true,
+  "vectorStore": {
+    "collectionName": "project-intelligence",
+    "textField": "chunk_text",
+    "embeddingField": "embedding_text",
+    "embeddingModel": "multilingual-e5-large",
+    "schemaVersion": "3"
+  },
+  "confluenceSpaces": [
+    {
+      "siteUrl": "https://naveenraj-elangovan.atlassian.net",
+      "spaceKey": "",
+      "spaceId": "2916360",
+      "rootPageIds": []
+    }
+  ],
+  "jiraProjects": [],
+  "githubRepositories": [],
+  "ingestionSchedule": {
+    "githubMergedPrEnabled": true,
+    "dailyEnabled": false,
+    "dailyAt": "00:00",
+    "timezone": "America/Mexico_City",
+    "manualEnabled": true
+  }
+}

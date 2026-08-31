@@ -1,0 +1,87 @@
+services:
+  api:
+    build:
+      context: .
+    image: project-intelligence-backend:${PI_IMAGE_TAG:?Set PI_IMAGE_TAG to an immutable release tag}
+    env_file:
+      - path: .env.production
+        required: true
+    expose:
+      - "8000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+
+  ingestion:
+    build:
+      context: ../project-intelligence-ingestion
+    image: project-intelligence-ingestion:${PI_IMAGE_TAG:?Set PI_IMAGE_TAG to an immutable release tag}
+    env_file:
+      - path: ../project-intelligence-ingestion/.env.production
+        required: true
+    expose:
+      - "8000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+
+  ingestion-worker:
+    build:
+      context: ../project-intelligence-ingestion
+      dockerfile: Dockerfile.worker
+    image: project-intelligence-ingestion-worker:${PI_IMAGE_TAG:?Set PI_IMAGE_TAG to an immutable release tag}
+    env_file:
+      - path: ../project-intelligence-ingestion/.env.production
+        required: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1700
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+
+  rag:
+    build:
+      context: ../project-intelligence-rag
+    image: project-intelligence-rag:${PI_IMAGE_TAG:?Set PI_IMAGE_TAG to an immutable release tag}
+    env_file:
+      - path: ../project-intelligence-rag/.env.production
+        required: true
+    expose:
+      - "8002"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - edge
+
+networks:
+  edge:
+    external: true
+    name: project-intelligence-edge

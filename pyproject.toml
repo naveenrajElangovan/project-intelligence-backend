@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "project-intelligence-backend"
+version = "0.1.0"
+description = "REST backend for Project Intelligence"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "aioodbc>=0.5,<1",
+  "aiosqlite>=0.21,<1",
+  "alembic>=1.16,<2",
+  "azure-identity>=1.24,<2",
+  "azure-keyvault-secrets>=4.10,<5",
+  "cryptography>=50,<51",
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "prometheus-client>=0.26,<1",
+  "pyjwt[crypto]>=2.10,<3",
+  "pydantic-settings>=2.10,<3",
+  "pymongo>=4.17,<5",
+  "sqlalchemy[asyncio]>=2.0.43,<3",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.4,<9",
+  "pytest-cov>=6.2,<7",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"

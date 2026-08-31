@@ -1,0 +1,9 @@
+from typing import Protocol
+
+
+class SecretStore(Protocol):
+    async def put_json(self, name: str, value: dict[str, object]) -> str: ...
+
+    async def get_json(self, reference: str) -> dict[str, object]: ...
+
+    async def delete(self, reference: str) -> None: ...
