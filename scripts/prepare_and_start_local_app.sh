@@ -5,9 +5,6 @@ SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIRECTORY="$(cd "${SCRIPT_DIRECTORY}/.." && pwd)"
 RAG_DIRECTORY="$(cd "${PROJECT_DIRECTORY}/../project-intelligence-rag" && pwd)"
 ENV_FILE="${PROJECT_DIRECTORY}/.env"
-RUNTIME_DIRECTORY="${PROJECT_DIRECTORY}/.run"
-API_PID_FILE="${RUNTIME_DIRECTORY}/backend-api.pid"
-API_LOG_FILE="${RUNTIME_DIRECTORY}/backend-api.log"
 
 read_env_value() {
   local requested_key="$1"
@@ -28,27 +25,6 @@ require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
     echo "$1 is required before starting the local application services." >&2
     exit 1
-  fi
-}
-
-explain_readiness_failure() {
-  # "Review the log" costs a round trip through 500 KB of stack traces for a
-  # cause the log already states in one line. Surface the known ones directly.
-  local log="$1"
-
-  [[ -f "${log}" ]] || return 0
-  if grep -q "monthly free amount allowance\|42119" "${log}"; then
-    echo "Cause: Azure SQL paused this database after reaching the free-tier" >&2
-    echo "monthly allowance. No script here can restore it. Wait for the renewal" >&2
-    echo "at 00:00 UTC on the first of next month, or open the database's Compute" >&2
-    echo "and Storage tab in the Azure Portal and choose 'Continue using database" >&2
-    echo "with additional charges'." >&2
-  elif grep -q "is not allowed to access the server\|40615" "${log}"; then
-    echo "Cause: this host's public IP is not in the SQL firewall rule." >&2
-    echo "Run ./scripts/sync_sql_access.sh and start again." >&2
-  elif grep -q "Login failed\|18456" "${log}"; then
-    echo "Cause: Azure SQL rejected the identity. Check role membership with" >&2
-    echo "./scripts/check_runtime_identity.py." >&2
   fi
 }
 
@@ -79,7 +55,6 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
-require_command az
 require_command curl
 require_command docker
 
@@ -94,6 +69,7 @@ fi
 # fully local stack would defeat the point of having one.
 database_url="${PI_DATABASE_URL:-$(read_env_value PI_DATABASE_URL)}"
 if [[ "${database_url}" == mssql* ]]; then
+  require_command az
   # One implementation of the identity and firewall checks, shared with the
   # standalone script so a mid-session IP change is repairable without a restart.
   "${SCRIPT_DIRECTORY}/sync_sql_access.sh"
@@ -106,26 +82,46 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
-mongodb_container_id="$(docker ps -aq --filter label=com.docker.compose.service=mongodb | head -n 1)"
-if [[ -n "${mongodb_container_id}" ]]; then
-  if [[ "$(docker inspect --format '{{.State.Running}}' "${mongodb_container_id}")" != "true" ]]; then
-    docker start "${mongodb_container_id}" >/dev/null
-  fi
-else
-  mongo_username="$(read_env_value PI_CHAT_MONGODB_ROOT_USERNAME)"
-  mongo_password="$(read_env_value PI_CHAT_MONGODB_ROOT_PASSWORD)"
-  mongo_docker_url="$(read_env_value PI_CHAT_MONGODB_DOCKER_URL)"
-  if [[ -z "${mongo_username}" || -z "${mongo_password}" || -z "${mongo_docker_url}" ]]; then
-    echo "MongoDB has not been initialized. Set PI_CHAT_MONGODB_ROOT_USERNAME," >&2
-    echo "PI_CHAT_MONGODB_ROOT_PASSWORD, and PI_CHAT_MONGODB_DOCKER_URL in .env." >&2
-    exit 1
-  fi
-  (
-    cd "${PROJECT_DIRECTORY}"
-    docker compose --env-file .env up -d mongodb
-  )
-  mongodb_container_id="$(docker ps -aq --filter label=com.docker.compose.service=mongodb | head -n 1)"
+# Compose needs MongoDB initialization credentials even when only Chroma is
+# selected because interpolation validates the complete file. Derive them from
+# the existing authenticated, git-ignored URL instead of storing a second copy.
+mongo_username="${PI_CHAT_MONGODB_ROOT_USERNAME:-$(read_env_value PI_CHAT_MONGODB_ROOT_USERNAME)}"
+mongo_password="${PI_CHAT_MONGODB_ROOT_PASSWORD:-$(read_env_value PI_CHAT_MONGODB_ROOT_PASSWORD)}"
+mongo_docker_url="$(read_env_value PI_CHAT_MONGODB_DOCKER_URL)"
+if [[ -z "${mongo_username}" || -z "${mongo_password}" ]]; then
+  mongo_credentials="$(
+    python3 -c '
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
+import sys
+
+value = ""
+for line in Path(sys.argv[1]).read_text().splitlines():
+    if line.startswith("PI_CHAT_MONGODB_DOCKER_URL="):
+        value = line.split("=", 1)[1].strip()
+        break
+parsed = urlsplit(value)
+if not parsed.username or parsed.password is None:
+    raise SystemExit("PI_CHAT_MONGODB_DOCKER_URL must contain URL-encoded credentials.")
+print(f"{unquote(parsed.username)}\t{unquote(parsed.password)}", end="")
+' "${ENV_FILE}"
+  )"
+  IFS=$'\t' read -r mongo_username mongo_password <<< "${mongo_credentials}"
+  unset mongo_credentials
 fi
+export PI_CHAT_MONGODB_ROOT_USERNAME="${mongo_username}"
+export PI_CHAT_MONGODB_ROOT_PASSWORD="${mongo_password}"
+
+# These are this launcher's data dependencies. Starting them here prevents RAG
+# from entering its lexical warm-up while Chroma is absent.
+(
+  cd "${PROJECT_DIRECTORY}"
+  docker compose --env-file .env up -d chroma mongodb
+)
+mongodb_container_id="$(
+  cd "${PROJECT_DIRECTORY}"
+  docker compose --env-file .env ps -q mongodb
+)"
 if [[ -z "${mongodb_container_id}" ]]; then
   echo "MongoDB was not created successfully." >&2
   exit 1
@@ -133,97 +129,118 @@ fi
 wait_for_mongodb "${mongodb_container_id}"
 echo "MongoDB is healthy."
 
-docker_api_container_id="$(docker ps -aq --filter label=com.docker.compose.service=api | head -n 1)"
-if [[ -n "${docker_api_container_id}" ]]; then
-  if [[ ! -s "${local_secret_store_path}" ]]; then
-    temporary_secret_store="$(mktemp "${local_secret_store_path}.restore.XXXXXX")"
-    if docker cp \
-      "${docker_api_container_id}:/var/lib/project-intelligence/provider-secrets.json" \
-      "${temporary_secret_store}" >/dev/null 2>&1; then
-      chmod 0600 "${temporary_secret_store}"
-      mv "${temporary_secret_store}" "${local_secret_store_path}"
-      echo "Restored the encrypted provider credential store for the native backend."
-    else
-      rm -f "${temporary_secret_store}"
-    fi
-  fi
-  if [[ "$(docker inspect --format '{{.State.Running}}' "${docker_api_container_id}")" == "true" ]]; then
-    docker stop "${docker_api_container_id}" >/dev/null
-    echo "Stopped the fixed-token Docker backend before starting the renewable local backend."
-  fi
+# A fresh official Mongo image creates only the root user in `admin`. The
+# application URL intentionally authenticates against its own database, so a
+# new volume otherwise passes the unauthenticated healthcheck and then makes the
+# backend die with AuthenticationFailed. Create the scoped application user
+# idempotently, using credentials already present inside the container; never
+# print or duplicate the password.
+chat_database="$(read_env_value PI_CHAT_MONGODB_DATABASE)"
+if [[ -z "${chat_database}" ]]; then
+  echo "PI_CHAT_MONGODB_DATABASE must be set before initializing chat storage." >&2
+  exit 1
 fi
+docker exec \
+  --env "PI_CHAT_APP_DATABASE=${chat_database}" \
+  "${mongodb_container_id}" \
+  sh -c 'mongosh --quiet \
+    --username "$MONGO_INITDB_ROOT_USERNAME" \
+    --password "$MONGO_INITDB_ROOT_PASSWORD" \
+    --authenticationDatabase admin \
+    --eval '\''
+      const name = process.env.PI_CHAT_APP_DATABASE;
+      const target = db.getSiblingDB(name);
+      if (target.getUser(process.env.MONGO_INITDB_ROOT_USERNAME) === null) {
+        target.createUser({
+          user: process.env.MONGO_INITDB_ROOT_USERNAME,
+          pwd: process.env.MONGO_INITDB_ROOT_PASSWORD,
+          roles: [{role: "readWrite", db: name}]
+        });
+      }
+    '\''' >/dev/null
+echo "MongoDB application user is ready."
 
-"${RAG_DIRECTORY}/scripts/start_local_macos.sh"
+if ! curl --fail --silent --max-time 5 http://127.0.0.1:8000/api/v2/heartbeat >/dev/null; then
+  echo "Chroma did not become reachable on http://127.0.0.1:8000." >&2
+  exit 1
+fi
+echo "Chroma is healthy."
 
-if curl --fail --silent http://127.0.0.1:8001/health >/dev/null 2>&1; then
-  # Health does not say which revision is answering. Because this launcher is
-  # idempotent, an edit would otherwise look like it had no effect: the process
-  # keeps serving the code it started with. Refuse rather than mislead.
-  if [[ ! -f "${API_PID_FILE}" ]]; then
-    echo "Something is serving http://127.0.0.1:8001 but ${API_PID_FILE} is absent," >&2
-    echo "so this launcher did not start it and cannot tell which code it runs." >&2
-    echo "Stop it and start again:" >&2
-    echo "  ./scripts/stop_local_macos_api.sh && ./scripts/prepare_and_start_local_app.sh" >&2
-    exit 1
-  fi
-  stale=""
-  if [[ -f "${API_PID_FILE}" ]]; then
-    # Only what the running process loaded. scripts/ affects the next launch and
-    # requirements.txt does not change the installed venv, so including them made
-    # the check fire on edits that cannot possibly affect the live service.
-    stale="$(cd "${PROJECT_DIRECTORY}" && find app .env \
-      -newer "${API_PID_FILE}" -print -quit 2>/dev/null || true)"
-  fi
-  if [[ -n "${stale}" && "${PI_DEV_ALLOW_STALE_API:-false}" != "true" ]]; then
-    # Self-heal rather than refuse. This launcher is idempotent and already knows
-    # the fix, so printing it and exiting 1 just interrupted whatever was calling
-    # it -- including run_unattended_ingestion.sh. Stop the stale process and
-    # re-execute, with a guard so a condition that survives a restart fails once
-    # instead of looping.
-    if [[ "${PI_DEV_API_RESTARTED:-false}" == "true" ]]; then
-      echo "The backend still reports stale code (${stale}) after a restart." >&2
-      echo "Something is rewriting app/ or .env while it starts." >&2
-      exit 1
-    fi
-    echo "Backend is running older code than disk (changed: ${stale}). Restarting it."
-    "${SCRIPT_DIRECTORY}/stop_local_macos_api.sh" || true
-    PI_DEV_API_RESTARTED=true exec "${BASH_SOURCE[0]}" "$@"
-  fi
-  echo "Backend is already healthy at http://127.0.0.1:8001."
+"${RAG_DIRECTORY}/scripts/stop_local_macos.sh" >/dev/null 2>&1 || true
+"${SCRIPT_DIRECTORY}/stop_local_macos_api.sh" >/dev/null 2>&1 || true
+
+# Keep the default stack self-contained. A detached macOS accelerator can be
+# terminated by the OS or a terminal session, which previously made every
+# project fail at embedding or reranking while the containers still looked up.
+# The container already mounts the same pinned models and safely uses CPU.
+use_host_accelerator="${PI_RAG_USE_HOST_ACCELERATOR:-false}"
+accelerator_key_file="${RAG_DIRECTORY}/.run/accelerator.key"
+if [[ "${use_host_accelerator}" == "true" ]]; then
+  "${RAG_DIRECTORY}/scripts/start_accelerator_macos.sh"
 else
-  mkdir -p "${RUNTIME_DIRECTORY}"
-  cd "${PROJECT_DIRECTORY}"
-  nohup ./scripts/run_local_macos_api.sh >"${API_LOG_FILE}" 2>&1 &
-  api_pid="$!"
-  echo "${api_pid}" >"${API_PID_FILE}"
-
-  for _ in {1..45}; do
-    if curl --fail --silent http://127.0.0.1:8001/health >/dev/null 2>&1; then
-      break
-    fi
-    if ! kill -0 "${api_pid}" 2>/dev/null; then
-      echo "Backend startup failed. Review ${API_LOG_FILE}." >&2
-  explain_readiness_failure "${API_LOG_FILE}"
-      exit 1
-    fi
-    sleep 1
-  done
+  mkdir -p "${RAG_DIRECTORY}/.run"
+  chmod 0700 "${RAG_DIRECTORY}/.run"
+  if [[ ! -s "${accelerator_key_file}" ]]; then
+    umask 077
+    openssl rand -hex 32 >"${accelerator_key_file}"
+  fi
+  echo "Using self-contained Docker embedding and reranking models."
+fi
+if [[ -z "${PI_RAG_INTERNAL_API_KEY:-}" ]]; then
+  PI_RAG_INTERNAL_API_KEY="$(<"${accelerator_key_file}")"
+  export PI_RAG_INTERNAL_API_KEY
 fi
 
-ready=false
-for _ in {1..60}; do
-  if curl --fail --silent --max-time 10 http://127.0.0.1:8001/ready >/dev/null; then
-    ready=true
+echo "Building and starting Docker RAG and backend API."
+(
+  cd "${PROJECT_DIRECTORY}"
+  docker compose --env-file .env up -d --build rag api
+)
+
+api_container_id="$(
+  cd "${PROJECT_DIRECTORY}"
+  docker compose --env-file .env ps -q api
+)"
+if [[ -s "${local_secret_store_path}" ]] \
+  && ! docker exec "${api_container_id}" \
+    sh -c 'test -s /var/lib/project-intelligence/provider-secrets.json && test -r /var/lib/project-intelligence/provider-secrets.json'; then
+  (
+    cd "${PROJECT_DIRECTORY}"
+    docker compose --env-file .env run --rm --no-deps \
+      --volume "${local_secret_store_path}:/source/provider-secrets.json:ro" \
+      --entrypoint /bin/sh secrets-init -c \
+      'cp /source/provider-secrets.json /var/lib/project-intelligence/provider-secrets.json \
+        && chown app:app /var/lib/project-intelligence/provider-secrets.json \
+        && chmod 0600 /var/lib/project-intelligence/provider-secrets.json'
+  )
+  docker restart "${api_container_id}" >/dev/null
+  echo "Migrated the encrypted provider credential store into Docker."
+fi
+
+rag_ready=false
+backend_ready=false
+for _ in {1..120}; do
+  if curl --fail --silent --max-time 5 http://127.0.0.1:8003/ready >/dev/null 2>&1; then
+    rag_ready=true
+  fi
+  if curl --fail --silent --max-time 5 http://127.0.0.1:8001/ready >/dev/null 2>&1; then
+    backend_ready=true
+  fi
+  if [[ "${rag_ready}" == "true" && "${backend_ready}" == "true" ]]; then
     break
   fi
   sleep 2
 done
-if [[ "${ready}" != "true" ]]; then
-  echo "Backend started, but a dependency is not ready. Review ${API_LOG_FILE}." >&2
-  explain_readiness_failure "${API_LOG_FILE}"
+if [[ "${rag_ready}" != "true" || "${backend_ready}" != "true" ]]; then
+  echo "The Docker application stack did not become ready." >&2
+  (
+    cd "${PROJECT_DIRECTORY}"
+    docker compose --env-file .env ps
+    docker compose --env-file .env logs --tail=120 rag api
+  ) >&2
   exit 1
 fi
 
-echo "Local services are ready. You can now start the application."
+echo "Docker services are ready. You can now start the application."
 echo "Backend: http://127.0.0.1:8001"
 echo "RAG:     http://127.0.0.1:8003"

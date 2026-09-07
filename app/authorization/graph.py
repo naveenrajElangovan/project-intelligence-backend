@@ -32,7 +32,7 @@ class GraphProjectAccessReader:
                 "project_authorization_not_configured user_id=%s missing_graph_client_credential=true",
                 user_object_id,
             )
-            return ProjectAccessContext(projects=(), project_roles={})
+            return ProjectAccessContext(projects=(), project_roles={}, project_departments={})
 
         owns_client = self._http_client is None
         client = self._http_client or httpx.AsyncClient(timeout=10.0)
@@ -156,20 +156,31 @@ class GraphProjectAccessReader:
 
 def parse_project_access(value: Any, attribute_set_name: str) -> ProjectAccessContext:
     if not isinstance(value, Mapping):
-        return ProjectAccessContext(projects=(), project_roles={})
+        return ProjectAccessContext(projects=(), project_roles={}, project_departments={})
     attribute_set = value.get(attribute_set_name)
     if not isinstance(attribute_set, Mapping):
-        return ProjectAccessContext(projects=(), project_roles={})
+        return ProjectAccessContext(projects=(), project_roles={}, project_departments={})
 
     projects = tuple(_string_values(attribute_set.get("Projects")))
-    roles: dict[str, str] = {}
+    roles: dict[str, list[str]] = {}
     for assignment in _string_values(attribute_set.get("ProjectRoles")):
         project_id, separator, role = assignment.partition(":")
         project_id = project_id.strip()
         role = role.strip()
         if separator and project_id and role:
-            roles[project_id] = role
-    return ProjectAccessContext(projects=projects, project_roles=roles)
+            roles.setdefault(project_id, []).append(role)
+    departments: dict[str, list[str]] = {}
+    for assignment in _string_values(attribute_set.get("ProjectDepartments")):
+        project_id, separator, department = assignment.partition(":")
+        project_id = project_id.strip()
+        department = department.strip()
+        if separator and project_id and department:
+            departments.setdefault(project_id, []).append(department)
+    return ProjectAccessContext(
+        projects=projects,
+        project_roles={key: tuple(dict.fromkeys(values)) for key, values in roles.items()},
+        project_departments={key: tuple(dict.fromkeys(values)) for key, values in departments.items()},
+    )
 
 
 def _string_values(value: Any) -> list[str]:

@@ -1,8 +1,10 @@
 import base64
+import binascii
 import json
 import os
 from typing import Any
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
@@ -23,10 +25,16 @@ class CredentialCipher:
         return base64.urlsafe_b64encode(nonce + ciphertext).decode()
 
     def decrypt(self, value: str) -> dict[str, Any]:
-        payload = base64.urlsafe_b64decode(value.encode())
-        plaintext = self._cipher.decrypt(payload[:12], payload[12:], None)
-        decoded = json.loads(plaintext)
+        try:
+            payload = base64.urlsafe_b64decode(value.encode())
+            if len(payload) <= 12:
+                raise ValueError("Encrypted provider credentials are malformed.")
+            plaintext = self._cipher.decrypt(payload[:12], payload[12:], None)
+            decoded = json.loads(plaintext)
+        except (binascii.Error, InvalidTag, UnicodeDecodeError, ValueError) as error:
+            raise ValueError(
+                "Encrypted provider credentials cannot be decrypted with the configured key."
+            ) from error
         if not isinstance(decoded, dict):
             raise ValueError("Encrypted provider credentials are malformed.")
         return decoded
-

@@ -7,7 +7,11 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
-from app.api.integration_helpers import callback_page, provider_secret_name
+from app.api.integration_helpers import (
+    callback_page,
+    provider_secret_name,
+    require_technical_lead_project,
+)
 from app.api.integration_contracts import (
     ConnectResponse,
     IntegrationStatusResponse,
@@ -66,20 +70,7 @@ async def project_access_context(
 
 
 def _can_ask_questions(project) -> bool:
-    """Asking needs a retrieval target, not a live provider connection.
-
-    This used to require at least one available integration. That conflates two
-    unrelated things: an OAuth connection is what lets *ingestion* fetch new
-    source material, while answering a question only reads vectors that were
-    already written to the index. The consequence was that a fully indexed
-    project became unusable the moment its connections were absent -- which is
-    exactly the state a rebuilt control plane starts in, with no way to recover
-    from inside the client, because there is no connect-integration screen.
-
-    Integration status is still reported in the response, so a caller can tell
-    the user their sources are going stale. That is a different message from
-    "chat is not available".
-    """
+    """Chat needs an active retrieval target; provider OAuth is ingestion-only."""
 
     return bool(
         project.active
@@ -174,7 +165,9 @@ async def synchronize_atlassian(
     secrets_store: Annotated[SecretStore, Depends(get_secret_store)],
     settings: Settings = Depends(get_settings),
 ) -> SynchronizationResponse:
-    project = await _require_project(project_id, principal, access_reader, project_store)
+    project = await require_technical_lead_project(
+        project_id, principal, access_reader, project_store
+    )
     if not project.jira_projects and not project.confluence_spaces:
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -310,7 +303,9 @@ async def connect_atlassian(
     store: Annotated[IntegrationStore, Depends(get_integration_store)],
     settings: Settings = Depends(get_settings),
 ) -> ConnectResponse:
-    project = await _require_project(project_id, principal, access_reader, project_store)
+    project = await require_technical_lead_project(
+        project_id, principal, access_reader, project_store
+    )
     if not settings.atlassian_oauth_configured:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Atlassian OAuth is not configured.")
     if not project.jira_projects and not project.confluence_spaces:
@@ -461,7 +456,7 @@ async def _require_project_access(
     project = await project_store.get(project_id)
     if project is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "The project is not configured in Azure SQL.")
-    return project, role
+    return project, role[0]
 
 
 def _select_resource(

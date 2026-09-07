@@ -52,7 +52,9 @@ services:
         required: true
     environment:
       PI_RAG_SERVICE_URL: ${PI_RAG_RUNTIME_URL:-http://rag:8002}
+      PI_RAG_INTERNAL_API_KEY: ${PI_RAG_INTERNAL_API_KEY:-}
       PI_CHAT_MONGODB_URL: ${PI_CHAT_MONGODB_DOCKER_URL:?set authenticated MongoDB URL}
+      PI_DATABASE_URL: ${PI_DATABASE_DOCKER_URL:?set container database URL}
       # Development only. Production uses Azure Key Vault.
       PI_LOCAL_SECRET_STORE_PATH: /var/lib/project-intelligence/provider-secrets.json
       # Development-only: scripts/start_dev_api.sh supplies this from `az login`.
@@ -67,12 +69,15 @@ services:
         condition: service_completed_successfully
       mongodb:
         condition: service_healthy
+      rag:
+        condition: service_healthy
     restart: unless-stopped
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
     volumes:
       - provider-secrets:/var/lib/project-intelligence
+      - ./.local-sql:/var/lib/project-intelligence/database
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
     networks: ["application"]
@@ -86,7 +91,9 @@ services:
         required: true
     environment:
       PI_INGEST_CONTROL_PLANE_URL: http://api:8000
+      PI_INGEST_METRICS_PUSHGATEWAY_URL: ${PI_INGEST_METRICS_PUSHGATEWAY_URL:-http://pushgateway:9091}
       PI_INGEST_CHROMA_HOST: chroma
+      PI_INGEST_ALLOWED_HOSTS: ${PI_INGEST_RUNTIME_ALLOWED_HOSTS:-ingestion,localhost,127.0.0.1}
     ports:
       - "127.0.0.1:8002:8000"
     restart: unless-stopped
@@ -108,6 +115,7 @@ services:
         required: true
     environment:
       PI_INGEST_CONTROL_PLANE_URL: http://api:8000
+      PI_INGEST_METRICS_PUSHGATEWAY_URL: ${PI_INGEST_METRICS_PUSHGATEWAY_URL:-http://pushgateway:9091}
     restart: unless-stopped
     read_only: true
     tmpfs:
@@ -128,12 +136,32 @@ services:
         required: true
     environment:
       PI_RAG_CHROMA_HOST: chroma
+      PI_RAG_OLLAMA_BASE_URL: http://host.docker.internal:11434
+      PI_RAG_LOCAL_MODELS_PATH: /models/bge-reranker-v2-m3
+      PI_RAG_LOCAL_EMBEDDING_PATH: /models/multilingual-e5-large
+      PI_RAG_LOCAL_RERANK_DEVICE: cpu
+      PI_RAG_LOCAL_EMBEDDING_DEVICE: cpu
+      # The default local stack runs the mounted embedding and reranking models
+      # inside this container.  A host accelerator is an explicit opt-in because
+      # losing that background process must not stop every project's answers.
+      PI_RAG_LOCAL_ACCELERATOR_URL: ${PI_RAG_LOCAL_ACCELERATOR_RUNTIME_URL:-}
+      PI_RAG_INTERNAL_API_KEY: ${PI_RAG_INTERNAL_API_KEY:-}
+      PI_RAG_OPENINFERENCE_ENABLED: "true"
+      PI_RAG_OPENINFERENCE_OTLP_ENDPOINT: http://host.docker.internal:4318/v1/traces
     ports:
       - "127.0.0.1:8003:8002"
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      chroma:
+        condition: service_started
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
+    volumes:
+      - ../project-intelligence-rag/.models/bge-reranker-v2-m3:/models/bge-reranker-v2-m3:ro
+      - ../project-intelligence-rag/.models/multilingual-e5-large:/models/multilingual-e5-large:ro
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
     healthcheck:

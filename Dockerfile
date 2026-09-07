@@ -19,13 +19,13 @@ RUN addgroup --system app \
     && adduser --system --ingroup app app \
     && install -d -o app -g app -m 0700 /var/lib/project-intelligence
 
-COPY requirements.txt ./
+COPY --chown=app:app requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --disable-pip-version-check -r requirements.txt
 
-COPY pyproject.toml README.md ./
-COPY app ./app
-COPY scripts ./scripts
+COPY --chown=app:app pyproject.toml README.md ./
+COPY --chown=app:app app ./app
+COPY --chown=app:app scripts ./scripts
 RUN python -m pip install --disable-pip-version-check --no-deps .
 RUN python -m scripts.generate_sbom /opt/project-intelligence-backend.cdx.json
 

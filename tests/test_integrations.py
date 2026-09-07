@@ -81,6 +81,11 @@ class NoAccessReader:
         return ProjectAccessContext(projects=(), project_roles={})
 
 
+class StoreUserAccessReader:
+    async def read(self, user_object_id: str) -> ProjectAccessContext:
+        return ProjectAccessContext(projects=("AAOS",), project_roles={"AAOS": "STORE_USER"})
+
+
 class FakeSecretStore:
     def __init__(self) -> None:
         self.values: dict[str, dict[str, object]] = {}
@@ -95,6 +100,11 @@ class FakeSecretStore:
 
     async def delete(self, reference: str) -> None:
         self.values.pop(reference, None)
+
+
+class UndecryptableSecretStore(FakeSecretStore):
+    async def get_json(self, reference: str) -> dict[str, object]:
+        raise ValueError("Encrypted provider credentials cannot be decrypted.")
 
 
 class ProjectStore:
@@ -168,6 +178,22 @@ def test_connect_returns_atlassian_authorization_url_bound_to_user() -> None:
     assert store.state.project_id == "AAOS"
 
 
+def test_store_user_cannot_manage_atlassian_connection() -> None:
+    store = FakeStore()
+    configure(store)
+    app.dependency_overrides[get_graph_project_access_reader] = StoreUserAccessReader
+    try:
+        response = TestClient(app).post(
+            "/v1/projects/AAOS/integrations/atlassian/connect",
+            headers={"Authorization": "Bearer test"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert store.state is None
+
+
 def test_status_returns_shared_jira_and_confluence_connection() -> None:
     store = FakeStore()
     now = datetime.now(UTC)
@@ -232,6 +258,41 @@ def test_access_context_combines_entra_assignment_and_backend_source_access() ->
     ]
     assert body["integrations"][0]["available"] is False
     assert body["integrations"][2]["available"] is True
+
+
+def test_access_context_stays_available_when_provider_secret_cannot_be_decrypted() -> None:
+    store = FakeStore()
+    now = datetime.now(UTC)
+    store.connection = ProviderConnection(
+        connected_by="user-id",
+        tenant_id="tenant-id",
+        project_id="AAOS",
+        provider="ATLASSIAN",
+        secret_reference="local://stale-atlassian",
+        resource_id="cloud-id",
+        resource_url="https://example.atlassian.net",
+        resource_name="Example",
+        scopes=("read:jira-work", "read:page:confluence"),
+        token_expires_at=now - timedelta(minutes=1),
+        connected_at=now,
+        updated_at=now,
+    )
+    configure(store, UndecryptableSecretStore())
+    try:
+        response = TestClient(app).get(
+            "/v1/projects/AAOS/access-context",
+            headers={"Authorization": "Bearer test"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["authorized"] is True
+    assert body["canAskQuestions"] is True
+    assert body["integrations"][0]["connected"] is False
+    assert body["integrations"][0]["available"] is False
+    assert body["integrations"][0]["message"] == "Authorization is required."
 
 
 def test_access_context_rejects_a_project_not_assigned_by_entra() -> None:
@@ -380,6 +441,22 @@ def test_synchronization_uses_current_users_connection_and_stores_access(monkeyp
         ("AAOS", "JIRA"),
         ("AAOS", "CONFLUENCE"),
     ]
+
+
+def test_store_user_cannot_start_provider_synchronization() -> None:
+    store = FakeStore()
+    configure(store)
+    app.dependency_overrides[get_graph_project_access_reader] = StoreUserAccessReader
+    try:
+        response = TestClient(app).post(
+            "/v1/projects/AAOS/integrations/atlassian/synchronize",
+            headers={"Authorization": "Bearer test"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 403
+    assert store.synchronizations == []
 
 
 def test_sources_returns_only_store_authorized_records() -> None:

@@ -62,6 +62,37 @@ class UpdatingConversationsCollection:
         self.update = update
 
 
+class ContextCollection:
+    def __init__(self, context: dict) -> None:
+        self.context = context
+
+    async def find_one(self, *_args, **_kwargs):
+        return {"context": self.context}
+
+
+class HistoryCursor:
+    def __init__(self) -> None:
+        self.query: dict | None = None
+
+    def sort(self, *_args):
+        return self
+
+    def limit(self, *_args):
+        return self
+
+    async def to_list(self, *, length: int):
+        return []
+
+
+class HistoryCollection:
+    def __init__(self) -> None:
+        self.cursor = HistoryCursor()
+
+    def find(self, query: dict, *_args):
+        self.cursor.query = query
+        return self.cursor
+
+
 def test_semantic_context_update_is_bounded_and_revision_guarded() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
     conversations = UpdatingConversationsCollection()
@@ -130,6 +161,38 @@ def test_low_confidence_context_update_is_not_persisted() -> None:
     assert conversations.update is None
 
 
+def test_version_one_context_is_read_as_empty_without_losing_revision() -> None:
+    store = MongoConversationStore.__new__(MongoConversationStore)
+    store._conversations = ContextCollection(
+        {
+            "version": 1,
+            "active_subject": "poisoned refusal subject",
+            "last_intent": "DELIVERY",
+            "last_resolved_question": "failed question",
+            "state_revision": 16,
+        }
+    )
+
+    context = asyncio.run(store._load_context("owner", "DEMO", "conversation"))
+
+    assert context.version == 2
+    assert context.active_subject == ""
+    assert context.last_intent == ""
+    assert context.last_resolved_question == ""
+    assert context.state_revision == 16
+
+
+def test_rag_history_excludes_confidence_none_turns() -> None:
+    store = MongoConversationStore.__new__(MongoConversationStore)
+    turns = HistoryCollection()
+    store._turns = turns
+    store._history_turns = 6
+
+    assert asyncio.run(store._load_history("owner", "DEMO", "conversation")) == ()
+    assert turns.cursor.query is not None
+    assert turns.cursor.query["confidence"] == {"$in": ["MEDIUM", "HIGH"]}
+
+
 def test_missing_conversation_id_creates_a_distinct_new_chat() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
     conversations = ConversationsCollection()
@@ -158,7 +221,7 @@ def test_missing_conversation_id_creates_a_distinct_new_chat() -> None:
         "updated_at": now,
         "expires_at": now + store._retention,
         "context": {
-            "version": 1,
+                "version": 2,
             "summary": "",
             "active_subject": "",
             "entities": [],

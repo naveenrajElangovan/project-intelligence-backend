@@ -40,6 +40,19 @@ def _rag_service_client(request: Request, settings: Settings) -> RagServiceClien
     return RagServiceClient(settings, client=client)
 
 
+def _successful_context_update(response: dict[str, object]) -> dict[str, object] | None:
+    """Accept semantic memory only from verified, non-empty RAG answers."""
+
+    update = response.get("conversationContextUpdate")
+    if (
+        response.get("status") != "ANSWERED"
+        or response.get("confidence") == "NONE"
+        or not isinstance(update, dict)
+    ):
+        return None
+    return update
+
+
 @router.get(
     "/{project_id}/conversations",
     response_model=list[ConversationSummaryResponse],
@@ -171,7 +184,10 @@ async def project_chat(
 
     # The backend, never the client, creates the retrieval policies.
     policies = _retrieval_policies(
-        project_id, principal.object_id, access.project_roles[project_id]
+        project_id,
+        principal.object_id,
+        access.project_roles[project_id],
+        access.project_departments.get(project_id, ()),
     )
     pending = await _begin_conversation_turn(
         conversation_store, principal.object_id, project_id, body
@@ -219,9 +235,7 @@ async def project_chat(
         project_id=project_id,
         answer=result.answer,
         confidence=result.confidence,
-        context_update=response.get("conversationContextUpdate")
-        if isinstance(response.get("conversationContextUpdate"), dict)
-        else None,
+        context_update=_successful_context_update(response),
     )
     chat_event(
         request_id_value=correlation_id,
@@ -268,7 +282,10 @@ async def project_chat_stream(
     if project is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "The project is not configured.")
     policies = _retrieval_policies(
-        project_id, principal.object_id, access.project_roles[project_id]
+        project_id,
+        principal.object_id,
+        access.project_roles[project_id],
+        access.project_departments.get(project_id, ()),
     )
     pending = await _begin_conversation_turn(
         conversation_store, principal.object_id, project_id, body
@@ -310,9 +327,7 @@ async def project_chat_stream(
                         project_id=project_id,
                         answer=result.answer,
                         confidence=result.confidence,
-                        context_update=private_response.get("conversationContextUpdate")
-                        if isinstance(private_response.get("conversationContextUpdate"), dict)
-                        else None,
+                        context_update=_successful_context_update(private_response),
                     )
                     completed = True
                     reason_code = "OK" if result.confidence != "NONE" else "NO_ANSWER"

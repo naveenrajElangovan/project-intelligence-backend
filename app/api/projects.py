@@ -81,7 +81,7 @@ async def project_dashboard(
         project=ProjectSummary(
             project_id=project_id,
             name=project.display_name,
-            role=role,
+            role=role[0],
             health="UNKNOWN",
             progress=0,
             current_stage="NOT_SYNCHRONIZED",

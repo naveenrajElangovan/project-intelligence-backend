@@ -1,5 +1,6 @@
 from azure.core.exceptions import ClientAuthenticationError
 from fastapi.testclient import TestClient
+import pytest
 from sqlalchemy.exc import OperationalError
 
 from app.auth.dependencies import get_current_principal
@@ -127,3 +128,60 @@ def test_me_reports_database_identity_outage_as_service_unavailable() -> None:
 class _UnavailableIdentityProjectStore:
     async def list_by_ids(self, project_ids: tuple[str, ...]):
         raise ClientAuthenticationError("No database identity is available.")
+
+
+@pytest.mark.parametrize(
+    "graph_projects",
+    (("T2.0", "T2.0-STORE"), ("T2.0-STORE", "T2.0")),
+)
+def test_me_preserves_graph_project_order_instead_of_display_name_order(
+    graph_projects: tuple[str, ...],
+) -> None:
+    class OrderedAccessReader:
+        async def read(self, user_object_id: str) -> ProjectAccessContext:
+            return ProjectAccessContext(
+                projects=graph_projects,
+                project_roles={
+                    "T2.0": "TECHNICAL_LEAD",
+                    "T2.0-STORE": "STORE_USER",
+                },
+            )
+
+    class DisplayNameSortedStore:
+        async def list_by_ids(self, project_ids: tuple[str, ...]):
+            def project(project_id: str, display_name: str) -> ProjectDefinition:
+                return ProjectDefinition(
+                    project_id=project_id,
+                    display_name=display_name,
+                    active=True,
+                    jira_projects=(),
+                    confluence_spaces=(),
+                    github_repositories=(),
+                    vector_store=VectorStoreRoute("project-intelligence"),
+                )
+
+            return (
+                project("T2.0-STORE", "Tiendas 2.0 Store Assistant"),
+                project("T2.0", "Tiendas 3B Platform"),
+            )
+
+    app.dependency_overrides[get_current_principal] = lambda: EntraPrincipal(
+        object_id="entra-object-id",
+        subject="subject-id",
+        tenant_id="tenant-id",
+        display_name="Developer",
+        username="developer@example.com",
+        email="developer@example.com",
+        claims={},
+    )
+    app.dependency_overrides[get_graph_project_access_reader] = lambda: OrderedAccessReader()
+    app.dependency_overrides[get_project_store] = DisplayNameSortedStore
+    try:
+        response = TestClient(app).get("/v1/me", headers={"Authorization": "Bearer test"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert [
+        assignment["projectId"] for assignment in response.json()["assignedProjects"]
+    ] == list(graph_projects)

@@ -268,7 +268,7 @@ def test_chat_passes_only_backend_created_policies(monkeypatch) -> None:
         assert request_id
         assert conversation_history == ()
         assert conversation_context == {
-            "version": 1,
+            "version": 2,
             "summary": "",
             "activeSubject": "",
             "entities": [],
@@ -330,6 +330,28 @@ def test_chat_missing_answer_is_not_reported_as_authorization_denial(monkeypatch
     assert response.status_code == 200
     assert "enough evidence" in response.json()["answer"]
     assert "authorized" not in response.json()["answer"].casefold()
+
+
+def test_context_update_is_accepted_only_for_verified_answered_responses() -> None:
+    update = {"standaloneQuestion": "How does Atlas work?"}
+
+    assert chat_api._successful_context_update(
+        {"status": "ANSWERED", "confidence": "HIGH", "conversationContextUpdate": update}
+    ) == update
+    assert chat_api._successful_context_update(
+        {
+            "status": "INSUFFICIENT_EVIDENCE",
+            "confidence": "NONE",
+            "conversationContextUpdate": update,
+        }
+    ) is None
+    assert chat_api._successful_context_update(
+        {
+            "status": "NEEDS_CLARIFICATION",
+            "confidence": "NONE",
+            "conversationContextUpdate": update,
+        }
+    ) is None
 
 
 def test_chat_stream_preserves_server_created_policies_and_verified_events(monkeypatch) -> None:

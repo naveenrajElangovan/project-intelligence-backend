@@ -1,0 +1,53 @@
+{
+  "projectId": "T2.0-STORE",
+  "displayName": "Tiendas 2.0 Store Assistant",
+  "active": true,
+  "vectorStore": {
+    "collectionName": "project-intelligence",
+    "textField": "chunk_text",
+    "embeddingField": "embedding_text",
+    "embeddingModel": "multilingual-e5-large",
+    "schemaVersion": "3"
+  },
+  "confluenceSpaces": [
+    {
+      "siteUrl": "https://naveenraj-elangovan.atlassian.net",
+      "spaceKey": "StoreUsers",
+      "spaceId": "16089092",
+      "rootPageIds": [
+        "16089264",
+        "16515074",
+        "16515093",
+        "16547841",
+        "16547864",
+        "16580613",
+        "16646147",
+        "16646166",
+        "16646188",
+        "16678917",
+        "16711689",
+        "16711721",
+        "16777221",
+        "16908299",
+        "16941057",
+        "16941090",
+        "16973859",
+        "17006599",
+        "17039377",
+        "17072139",
+        "17104899",
+        "17104915",
+        "17170437"
+      ]
+    }
+  ],
+  "jiraProjects": [],
+  "githubRepositories": [],
+  "ingestionSchedule": {
+    "githubMergedPrEnabled": false,
+    "dailyEnabled": false,
+    "dailyAt": "00:00",
+    "timezone": "America/Mexico_City",
+    "manualEnabled": true
+  }
+}

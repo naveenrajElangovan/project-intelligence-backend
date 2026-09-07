@@ -4,6 +4,32 @@ set -euo pipefail
 SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIRECTORY="$(cd "${SCRIPT_DIRECTORY}/.." && pwd)"
 
+# Compose requires MongoDB initialization credentials separately from the
+# authenticated application URL. For local development, derive them from the
+# existing git-ignored URL instead of duplicating the password in .env.
+if [[ -z "${PI_CHAT_MONGODB_ROOT_USERNAME:-}" || -z "${PI_CHAT_MONGODB_ROOT_PASSWORD:-}" ]]; then
+  mongo_credentials="$(
+    python3 -c '
+from pathlib import Path
+from urllib.parse import unquote, urlsplit
+import sys
+
+value = ""
+for line in Path(sys.argv[1]).read_text().splitlines():
+    if line.startswith("PI_CHAT_MONGODB_DOCKER_URL="):
+        value = line.split("=", 1)[1].strip()
+        break
+parsed = urlsplit(value)
+if not parsed.username or parsed.password is None:
+    raise SystemExit("PI_CHAT_MONGODB_DOCKER_URL must contain URL-encoded credentials.")
+print(f"{unquote(parsed.username)}\t{unquote(parsed.password)}", end="")
+' "${PROJECT_DIRECTORY}/.env"
+  )"
+  IFS=$'\t' read -r PI_CHAT_MONGODB_ROOT_USERNAME PI_CHAT_MONGODB_ROOT_PASSWORD <<< "${mongo_credentials}"
+  export PI_CHAT_MONGODB_ROOT_USERNAME PI_CHAT_MONGODB_ROOT_PASSWORD
+  unset mongo_credentials
+fi
+
 # Use the explicitly configured, already-authenticated SQL identity cache. Read
 # only this non-secret path from .env; never source the complete secrets file.
 if [[ -z "${PI_DEV_SQL_AZURE_CONFIG_DIR:-}" && -f "${PROJECT_DIRECTORY}/.env" ]]; then

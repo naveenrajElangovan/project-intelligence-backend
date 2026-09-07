@@ -59,8 +59,8 @@ class SqlIdentityAccessStore:
                 record.active = False
                 record.last_verified_at = now
             for project_id in configured:
-                role = context.project_roles.get(project_id)
-                if not role:
+                roles = context.project_roles.get(project_id)
+                if not roles:
                     continue
                 record = existing.get(project_id)
                 if record is None:
@@ -68,7 +68,7 @@ class SqlIdentityAccessStore:
                         ProjectMembershipRecord(
                             user_id=user_id,
                             project_id=project_id,
-                            role=role,
+                            role=roles[0],
                             access_policy_id=f"project:{project_id}",
                             authority="MICROSOFT_GRAPH",
                             active=True,
@@ -76,7 +76,7 @@ class SqlIdentityAccessStore:
                         )
                     )
                 else:
-                    record.role = role
+                    record.role = roles[0]
                     record.access_policy_id = f"project:{project_id}"
                     record.authority = "MICROSOFT_GRAPH"
                     record.active = True

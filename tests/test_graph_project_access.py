@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.authorization.graph import GraphProjectAccessReader, parse_project_access
+from app.application.chat_policy import retrieval_policies
 from app.config import Settings
 
 
@@ -23,6 +24,44 @@ def test_parse_project_access_requires_matching_project_and_role() -> None:
     )
 
     assert context.assignments == (("AAOS", "TECHNICAL_LEAD"),)
+
+
+def test_parse_project_access_preserves_multiple_roles_and_departments() -> None:
+    context = parse_project_access(
+        {
+            "ProjectIntelligence": {
+                "Projects": ["COMPANY"],
+                "ProjectRoles": ["COMPANY:EMPLOYEE", "COMPANY:MANAGER"],
+                "ProjectDepartments": [
+                    "COMPANY:FINANCE",
+                    "COMPANY:LOGISTICS",
+                    "COMPANY:PURCHASING",
+                ],
+            }
+        },
+        "ProjectIntelligence",
+    )
+
+    assert context.project_roles["COMPANY"] == ("EMPLOYEE", "MANAGER")
+    assert context.project_departments["COMPANY"] == (
+        "FINANCE",
+        "LOGISTICS",
+        "PURCHASING",
+    )
+    assert retrieval_policies(
+        "COMPANY",
+        "user-1",
+        context.project_roles["COMPANY"],
+        context.project_departments["COMPANY"],
+    ) == (
+        "project:COMPANY",
+        "user:user-1",
+        "role:COMPANY:EMPLOYEE",
+        "role:COMPANY:MANAGER",
+        "department:COMPANY:FINANCE",
+        "department:COMPANY:LOGISTICS",
+        "department:COMPANY:PURCHASING",
+    )
 
 
 def test_graph_reader_uses_app_token_and_reads_current_user_attributes() -> None:

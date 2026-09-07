@@ -205,7 +205,7 @@ async def _require_project_role(
     role = context.project_roles.get(project_id)
     if project_id not in context.projects or role is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "You do not have access to this project.")
-    return role
+    return role[0]
 
 
 def _validate_project_sources(body: ProjectConfigurationRequest) -> None:

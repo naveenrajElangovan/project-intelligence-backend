@@ -92,7 +92,7 @@ services:
     <<: *hardening
     image: ${PI_IMAGE_REGISTRY:?set the registry}/project-intelligence-rag:${PI_IMAGE_TAG:?set an immutable tag}
     env_file:
-      - path: ./env/rag.env.production
+      - path: ../project-intelligence-rag/.env.production
         required: true
     environment:
       PI_RAG_CHROMA_HOST: chroma
@@ -120,7 +120,7 @@ services:
     <<: *hardening
     image: ${PI_IMAGE_REGISTRY:?set the registry}/project-intelligence-ingestion:${PI_IMAGE_TAG:?set an immutable tag}
     env_file:
-      - path: ./env/ingestion.env.production
+      - path: ../project-intelligence-ingestion/.env.production
         required: true
     environment:
       PI_INGEST_CONTROL_PLANE_URL: http://api:8000
@@ -140,7 +140,7 @@ services:
     profiles: ["worker"]
     image: ${PI_IMAGE_REGISTRY:?set the registry}/project-intelligence-ingestion-worker:${PI_IMAGE_TAG:?set an immutable tag}
     env_file:
-      - path: ./env/ingestion.env.production
+      - path: ../project-intelligence-ingestion/.env.production
         required: true
     environment:
       PI_INGEST_CONTROL_PLANE_URL: http://api:8000

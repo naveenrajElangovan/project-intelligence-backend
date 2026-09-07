@@ -20,7 +20,7 @@ class HistoryMessage:
 class ConversationContextRecord:
     """Bounded semantic memory; it is never authoritative retrieval evidence."""
 
-    version: int = 1
+    version: int = 2
     summary: str = ""
     active_subject: str = ""
     entities: tuple[dict[str, str], ...] = ()

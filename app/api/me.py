@@ -56,11 +56,21 @@ async def me(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Project configuration is temporarily unavailable.",
         ) from error
+    graph_order = {
+        project_id: index for index, project_id in enumerate(access_context.projects)
+    }
+    configured_projects = sorted(
+        configured_projects,
+        key=lambda project: (
+            graph_order.get(project.project_id, len(graph_order)),
+            project.project_id,
+        ),
+    )
     assignments = [
         ProjectAssignment(
             project_id=project.project_id,
             display_name=project.display_name,
-            role=access_context.project_roles[project.project_id],
+            role=access_context.project_roles[project.project_id][0],
         )
         for project in configured_projects
         if project.project_id in access_context.project_roles

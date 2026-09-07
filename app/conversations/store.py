@@ -304,7 +304,7 @@ class MongoConversationStore:
             "updated_at": now,
             "expires_at": now + self._retention,
             "context": {
-                "version": 1,
+                "version": 2,
                 "summary": "",
                 "active_subject": "",
                 "entities": [],
@@ -350,19 +350,16 @@ class MongoConversationStore:
             )
         except (TypeError, ValueError):
             version, revision = 1, 0
+        legacy = version < 2
         return ConversationContextRecord(
-            version=max(1, min(version, 10)),
-            summary=str(raw.get("summary") or "")[:2000] if isinstance(raw, dict) else "",
-            active_subject=str(raw.get("active_subject") or "")[:500]
-            if isinstance(raw, dict)
-            else "",
-            entities=safe_entities,
-            last_intent=str(raw.get("last_intent") or "")[:80]
-            if isinstance(raw, dict)
-            else "",
-            last_resolved_question=str(raw.get("last_resolved_question") or "")[:4000]
-            if isinstance(raw, dict)
-            else "",
+            version=2,
+            summary="" if legacy else str(raw.get("summary") or "")[:2000],
+            active_subject="" if legacy else str(raw.get("active_subject") or "")[:500],
+            entities=() if legacy else safe_entities,
+            last_intent="" if legacy else str(raw.get("last_intent") or "")[:80],
+            last_resolved_question=""
+            if legacy
+            else str(raw.get("last_resolved_question") or "")[:4000],
             state_revision=max(0, revision),
         )
 
@@ -420,7 +417,7 @@ class MongoConversationStore:
             },
             {
                 "$set": {
-                    "context.version": 1,
+                    "context.version": 2,
                     "context.summary": summary[:2000],
                     "context.active_subject": subject,
                     "context.entities": safe_entities,
@@ -443,8 +440,9 @@ class MongoConversationStore:
                     "owner_id": owner_id,
                     "project_id": project_id,
                     "status": "COMPLETE",
+                    "confidence": {"$in": ["MEDIUM", "HIGH"]},
                 },
-                {"question": 1, "answer": 1, "created_at": 1},
+                {"question": 1, "answer": 1, "confidence": 1, "created_at": 1},
             )
             .sort("created_at", DESCENDING)
             .limit(self._history_turns)
