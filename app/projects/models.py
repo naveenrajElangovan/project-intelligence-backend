@@ -47,6 +47,28 @@ class IngestionSchedule:
 
 
 @dataclass(frozen=True, slots=True)
+class SourceAccessRule:
+    provider: str
+    match_field: str
+    prefix: str
+    access_policy_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalProfile:
+    max_chunks_per_source: int
+    rerank_top_n: int
+    mixed_source_top_n: int
+
+    def as_payload(self) -> dict[str, int]:
+        return {
+            "maxChunksPerSource": self.max_chunks_per_source,
+            "rerankTopN": self.rerank_top_n,
+            "mixedSourceTopN": self.mixed_source_top_n,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ProjectDefinition:
     project_id: str
     display_name: str
@@ -56,6 +78,8 @@ class ProjectDefinition:
     github_repositories: tuple[GitHubRepositorySource, ...]
     vector_store: VectorStoreRoute
     ingestion_schedule: IngestionSchedule = IngestionSchedule()
+    source_access_rules: tuple[SourceAccessRule, ...] = ()
+    retrieval_profile: RetrievalProfile | None = None
 
     def github_repository(self, owner: str, repository: str) -> GitHubRepositorySource | None:
         expected = f"{owner}/{repository}".lower()

@@ -2,10 +2,9 @@ import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.config import get_settings
+from app.infrastructure.sql.database import get_engine
 from app.infrastructure.sql.models import Base
 
 config = context.config
@@ -38,14 +37,16 @@ def do_run_migrations(connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-    await connectable.dispose()
+    # Use the same engine factory as the application so Azure SQL migrations
+    # receive the renewable Entra access token. Constructing a raw Alembic
+    # engine bypasses the token hook and fails even when the application can
+    # connect successfully.
+    connectable = get_engine()
+    try:
+        async with connectable.connect() as connection:
+            await connection.run_sync(do_run_migrations)
+    finally:
+        await connectable.dispose()
 
 
 if context.is_offline_mode():

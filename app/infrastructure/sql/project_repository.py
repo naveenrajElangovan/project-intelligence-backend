@@ -9,6 +9,8 @@ from app.projects.models import (
     GitHubRepositorySource,
     IngestionSchedule,
     JiraProjectSource,
+    RetrievalProfile,
+    SourceAccessRule,
     VectorStoreRoute,
     ProjectDefinition,
 )
@@ -108,6 +110,20 @@ def _record_values(project: ProjectDefinition) -> dict[str, object]:
             "timezone": project.ingestion_schedule.timezone,
             "manualEnabled": project.ingestion_schedule.manual_enabled,
         },
+        "source_access_rules": [
+            {
+                "provider": rule.provider,
+                "matchField": rule.match_field,
+                "prefix": rule.prefix,
+                "accessPolicyId": rule.access_policy_id,
+            }
+            for rule in project.source_access_rules
+        ],
+        "retrieval_profile": (
+            project.retrieval_profile.as_payload()
+            if project.retrieval_profile is not None
+            else {}
+        ),
     }
 
 
@@ -154,5 +170,23 @@ def _project(record: ProjectRecord) -> ProjectDefinition:
             daily_at=str(schedule.get("dailyAt") or "00:00"),
             timezone=str(schedule.get("timezone") or "America/Mexico_City"),
             manual_enabled=bool(schedule.get("manualEnabled", True)),
+        ),
+        source_access_rules=tuple(
+            SourceAccessRule(
+                provider=str(item["provider"]),
+                match_field=str(item["matchField"]),
+                prefix=str(item["prefix"]),
+                access_policy_id=str(item["accessPolicyId"]),
+            )
+            for item in record.source_access_rules or []
+        ),
+        retrieval_profile=(
+            RetrievalProfile(
+                max_chunks_per_source=int(record.retrieval_profile["maxChunksPerSource"]),
+                rerank_top_n=int(record.retrieval_profile["rerankTopN"]),
+                mixed_source_top_n=int(record.retrieval_profile["mixedSourceTopN"]),
+            )
+            if record.retrieval_profile
+            else None
         ),
     )

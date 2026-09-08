@@ -137,3 +137,63 @@ def test_accepts_provider_neutral_collection_name() -> None:
     assert response.status_code == 200
     assert store.project is not None
     assert store.project.vector_store.collection_name == "future-provider-compatible"
+
+
+def test_source_access_and_retrieval_configuration_round_trip() -> None:
+    store = FakeStore()
+    configure(store)
+    updated = body()
+    updated["sourceAccessRules"] = [
+        {
+            "provider": "CONFLUENCE",
+            "matchField": "TITLE",
+            "prefix": "[STORE]",
+            "accessPolicyId": "department:POS_BOT:STORE_OPERATIONS",
+        }
+    ]
+    updated["retrievalProfile"] = {
+        "maxChunksPerSource": 12,
+        "rerankTopN": 16,
+        "mixedSourceTopN": 12,
+    }
+    try:
+        response = TestClient(app).put(
+            "/v1/projects/POS_BOT/configuration",
+            json=updated,
+            headers={"Authorization": "Bearer test"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["sourceAccessRules"] == updated["sourceAccessRules"]
+    assert response.json()["retrievalProfile"] == updated["retrievalProfile"]
+    assert store.project.source_access_rules[0].access_policy_id == (
+        "department:POS_BOT:STORE_OPERATIONS"
+    )
+    assert store.project.retrieval_profile.max_chunks_per_source == 12
+
+
+def test_source_access_rule_cannot_name_another_project() -> None:
+    store = FakeStore()
+    configure(store)
+    updated = body()
+    updated["sourceAccessRules"] = [
+        {
+            "provider": "CONFLUENCE",
+            "matchField": "TITLE",
+            "prefix": "[STORE]",
+            "accessPolicyId": "department:OTHER:STORE_OPERATIONS",
+        }
+    ]
+    try:
+        response = TestClient(app).put(
+            "/v1/projects/POS_BOT/configuration",
+            json=updated,
+            headers={"Authorization": "Bearer test"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert store.project is None

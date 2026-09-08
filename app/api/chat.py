@@ -209,6 +209,11 @@ async def project_chat(
                 for message in pending.history
             ),
             pending.context.as_payload(),
+            **(
+                {"retrieval_profile": project.retrieval_profile.as_payload()}
+                if getattr(project, "retrieval_profile", None) is not None
+                else {}
+            ),
         )
     except (httpx.HTTPError, ValueError, KeyError) as failure:
         chat_event(
@@ -314,6 +319,11 @@ async def project_chat_stream(
                     for message in pending.history
                 ),
                 pending.context.as_payload(),
+                **(
+                    {"retrieval_profile": project.retrieval_profile.as_payload()}
+                    if getattr(project, "retrieval_profile", None) is not None
+                    else {}
+                ),
             ):
                 event_type = event.get("type")
                 if event_type == "complete" and isinstance(event.get("response"), dict):

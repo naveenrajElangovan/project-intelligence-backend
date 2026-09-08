@@ -27,6 +27,7 @@ class RagServiceClient:
         request_id: str = "",
         conversation_history: tuple[dict[str, str], ...] = (),
         conversation_context: dict[str, object] | None = None,
+        retrieval_profile: dict[str, int] | None = None,
     ) -> dict[str, object]:
         """Request one buffered, verified answer from the RAG service."""
 
@@ -40,22 +41,25 @@ class RagServiceClient:
                 headers["Authorization"] = f"Bearer {self._settings.rag_internal_api_key}"
             if request_id:
                 headers["X-Request-ID"] = request_id
+            payload = {
+                "projectId": project_id,
+                "collectionName": collection_name,
+                "textField": text_field,
+                "embeddingField": embedding_field,
+                "embeddingModel": embedding_model,
+                "schemaVersion": schema_version,
+                "question": question,
+                "accessPolicyIds": list(access_policy_ids),
+                "modelProfile": model_profile,
+                "conversationHistory": list(conversation_history),
+                "conversationContext": conversation_context or {},
+            }
+            if retrieval_profile is not None:
+                payload["retrievalProfile"] = retrieval_profile
             response = await client.post(
                 f"{self._settings.rag_service_url.rstrip('/')}/v1/answer",
                 headers=headers,
-                json={
-                    "projectId": project_id,
-                    "collectionName": collection_name,
-                    "textField": text_field,
-                    "embeddingField": embedding_field,
-                    "embeddingModel": embedding_model,
-                    "schemaVersion": schema_version,
-                    "question": question,
-                    "accessPolicyIds": list(access_policy_ids),
-                    "modelProfile": model_profile,
-                    "conversationHistory": list(conversation_history),
-                    "conversationContext": conversation_context or {},
-                },
+                json=payload,
             )
             response.raise_for_status()
             body = response.json()
@@ -80,6 +84,7 @@ class RagServiceClient:
         request_id: str = "",
         conversation_history: tuple[dict[str, str], ...] = (),
         conversation_context: dict[str, object] | None = None,
+        retrieval_profile: dict[str, int] | None = None,
     ) -> AsyncIterator[dict[str, object]]:
         """Proxy verified NDJSON events while retaining backend-created policies."""
 
@@ -108,6 +113,8 @@ class RagServiceClient:
             "conversationHistory": list(conversation_history),
             "conversationContext": conversation_context or {},
         }
+        if retrieval_profile is not None:
+            payload["retrievalProfile"] = retrieval_profile
         try:
             async with client.stream(
                 "POST",

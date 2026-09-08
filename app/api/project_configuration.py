@@ -1,5 +1,5 @@
 import re
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -15,6 +15,8 @@ from app.projects.models import (
     GitHubRepositorySource,
     IngestionSchedule,
     JiraProjectSource,
+    RetrievalProfile,
+    SourceAccessRule,
     VectorStoreRoute,
     ProjectDefinition,
 )
@@ -86,6 +88,23 @@ class IngestionScheduleConfiguration(BaseModel):
     manual_enabled: bool = Field(default=True, alias="manualEnabled")
 
 
+class SourceAccessRuleConfiguration(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    provider: Literal["CONFLUENCE", "JIRA", "GITHUB"]
+    match_field: Literal["TITLE", "SPACE_KEY", "LABEL", "PATH"] = Field(
+        alias="matchField"
+    )
+    prefix: str = Field(min_length=1, max_length=500)
+    access_policy_id: str = Field(alias="accessPolicyId", min_length=1, max_length=220)
+
+
+class RetrievalProfileConfiguration(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    max_chunks_per_source: int = Field(alias="maxChunksPerSource", ge=1, le=50)
+    rerank_top_n: int = Field(alias="rerankTopN", ge=1, le=50)
+    mixed_source_top_n: int = Field(alias="mixedSourceTopN", ge=1, le=50)
+
+
 class ProjectConfigurationRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     display_name: str = Field(alias="displayName", min_length=1, max_length=200)
@@ -103,6 +122,12 @@ class ProjectConfigurationRequest(BaseModel):
     ingestion_schedule: IngestionScheduleConfiguration = Field(
         default_factory=IngestionScheduleConfiguration,
         alias="ingestionSchedule",
+    )
+    source_access_rules: list[SourceAccessRuleConfiguration] = Field(
+        default_factory=list, alias="sourceAccessRules", max_length=500
+    )
+    retrieval_profile: RetrievalProfileConfiguration | None = Field(
+        default=None, alias="retrievalProfile"
     )
 
 
@@ -146,7 +171,7 @@ async def put_project_configuration(
             status.HTTP_403_FORBIDDEN,
             "Only the project technical lead can change project source mappings.",
         )
-    _validate_project_sources(body)
+    _validate_project_sources(project_id, body)
     project = ProjectDefinition(
         project_id=project_id,
         display_name=body.display_name,
@@ -191,6 +216,24 @@ async def put_project_configuration(
             timezone=body.ingestion_schedule.timezone,
             manual_enabled=body.ingestion_schedule.manual_enabled,
         ),
+        source_access_rules=tuple(
+            SourceAccessRule(
+                provider=item.provider,
+                match_field=item.match_field,
+                prefix=item.prefix,
+                access_policy_id=item.access_policy_id,
+            )
+            for item in body.source_access_rules
+        ),
+        retrieval_profile=(
+            RetrievalProfile(
+                max_chunks_per_source=body.retrieval_profile.max_chunks_per_source,
+                rerank_top_n=body.retrieval_profile.rerank_top_n,
+                mixed_source_top_n=body.retrieval_profile.mixed_source_top_n,
+            )
+            if body.retrieval_profile is not None
+            else None
+        ),
     )
     await store.upsert(project)
     return _response(project)
@@ -208,7 +251,9 @@ async def _require_project_role(
     return role[0]
 
 
-def _validate_project_sources(body: ProjectConfigurationRequest) -> None:
+def _validate_project_sources(
+    project_id: str, body: ProjectConfigurationRequest
+) -> None:
     for site in [*body.jira_projects, *body.confluence_spaces]:
         parsed = urlsplit(site.site_url)
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
@@ -258,6 +303,20 @@ def _validate_project_sources(body: ProjectConfigurationRequest) -> None:
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "The ingestion schedule timezone is invalid.",
         ) from error
+    shared_policy = f"project:{project_id}"
+    department_prefix = f"department:{project_id}:"
+    for rule in body.source_access_rules:
+        policy = rule.access_policy_id
+        valid_department = (
+            policy.startswith(department_prefix)
+            and re.fullmatch(r"[A-Z0-9_]{2,64}", policy.removeprefix(department_prefix))
+            is not None
+        )
+        if policy != shared_policy and not valid_department:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT,
+                "Source access policies must belong to the configured project.",
+            )
 
 
 def _valid_git_reference(value: str) -> bool:
@@ -317,5 +376,23 @@ def _response(project: ProjectDefinition) -> ProjectConfigurationResponse:
             daily_at=project.ingestion_schedule.daily_at,
             timezone=project.ingestion_schedule.timezone,
             manual_enabled=project.ingestion_schedule.manual_enabled,
+        ),
+        source_access_rules=[
+            SourceAccessRuleConfiguration(
+                provider=rule.provider,
+                match_field=rule.match_field,
+                prefix=rule.prefix,
+                access_policy_id=rule.access_policy_id,
+            )
+            for rule in project.source_access_rules
+        ],
+        retrieval_profile=(
+            RetrievalProfileConfiguration(
+                max_chunks_per_source=project.retrieval_profile.max_chunks_per_source,
+                rerank_top_n=project.retrieval_profile.rerank_top_n,
+                mixed_source_top_n=project.retrieval_profile.mixed_source_top_n,
+            )
+            if project.retrieval_profile is not None
+            else None
         ),
     )

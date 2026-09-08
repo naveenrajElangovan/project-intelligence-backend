@@ -65,6 +65,8 @@ async def _run() -> None:
         record.github_repositories = payload.get("githubRepositories") or []
         record.vector_store = payload["vectorStore"]
         record.ingestion_schedule = payload.get("ingestionSchedule") or {}
+        record.source_access_rules = payload.get("sourceAccessRules") or []
+        record.retrieval_profile = payload.get("retrievalProfile") or {}
         record.updated_at = now
         if existing is None:
             session.add(record)

@@ -74,6 +74,8 @@ def test_internal_project_mapping_contains_routing_but_no_tokens() -> None:
     payload = response.json()
     assert payload["projectId"] == "DEMO"
     assert payload["githubRepositories"][0]["repository"] == "private-repo"
+    assert payload["sourceAccessRules"] == []
+    assert payload["retrievalProfile"] is None
     assert "accessToken" not in response.text
     assert "refreshToken" not in response.text
 

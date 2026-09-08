@@ -50,6 +50,12 @@ class ProjectRecord(Base):
     github_repositories: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
     vector_store: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     ingestion_schedule: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    source_access_rules: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    retrieval_profile: Mapped[dict[str, object]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
 

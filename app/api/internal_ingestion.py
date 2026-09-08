@@ -37,6 +37,8 @@ class IngestionProjectResponse(BaseModel):
     github_repositories: list[dict[str, object]] = Field(alias="githubRepositories")
     vector_store: dict[str, object] = Field(alias="vectorStore")
     ingestion_schedule: dict[str, object] = Field(alias="ingestionSchedule")
+    source_access_rules: list[dict[str, object]] = Field(alias="sourceAccessRules")
+    retrieval_profile: dict[str, object] | None = Field(alias="retrievalProfile")
     atlassian: AtlassianGatewayResponse | None = None
 
 
@@ -88,6 +90,8 @@ async def ingestion_project_by_repository(
         github_repositories=(mapping,),
         vector_store=project.vector_store,
         ingestion_schedule=project.ingestion_schedule,
+        source_access_rules=project.source_access_rules,
+        retrieval_profile=project.retrieval_profile,
     )
     return _project_response(scoped, None)
 
@@ -262,5 +266,19 @@ def _project_response(
             "timezone": project.ingestion_schedule.timezone,
             "manualEnabled": project.ingestion_schedule.manual_enabled,
         },
+        source_access_rules=[
+            {
+                "provider": rule.provider,
+                "matchField": rule.match_field,
+                "prefix": rule.prefix,
+                "accessPolicyId": rule.access_policy_id,
+            }
+            for rule in project.source_access_rules
+        ],
+        retrieval_profile=(
+            project.retrieval_profile.as_payload()
+            if project.retrieval_profile is not None
+            else None
+        ),
         atlassian=atlassian,
     )
