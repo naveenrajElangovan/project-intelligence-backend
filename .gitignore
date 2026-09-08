@@ -8,6 +8,7 @@ project_intelligence.db
 .venv/
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
 __pycache__/
 *.py[cod]

@@ -1,0 +1,23 @@
+[importlinter]
+root_package = app
+
+[importlinter:contract:application-does-not-import-api]
+name = Application services do not depend on HTTP routes
+type = forbidden
+source_modules =
+    app.application
+forbidden_modules =
+    app.api
+
+[importlinter:contract:models-stay-independent]
+name = Core records do not depend on delivery or storage frameworks
+type = forbidden
+source_modules =
+    app.auth.models
+    app.authorization.models
+    app.conversations.models
+    app.integrations.models
+    app.projects.models
+forbidden_modules =
+    app.api
+    app.infrastructure
