@@ -41,7 +41,7 @@ def test_me_uses_server_validated_claims() -> None:
         "username": "naveen@example.com",
         "displayName": "Naveenraj Elangovan",
         "email": "naveen@example.com",
-        "departments": ["Technology"],
+        "departments": ["Technology", "STORE_OPERATIONS"],
         "assignedProjects": [
             {"projectId": "AAOS", "displayName": "AAOS Pilot", "role": "TECHNICAL_LEAD"}
         ],
@@ -54,6 +54,7 @@ class _FakeAccessReader:
         return ProjectAccessContext(
             projects=("AAOS",),
             project_roles={"AAOS": "TECHNICAL_LEAD"},
+            project_departments={"AAOS": ("STORE_OPERATIONS",)},
         )
 
 

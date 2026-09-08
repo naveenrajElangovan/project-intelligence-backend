@@ -110,13 +110,25 @@ async def me(
             ),
         )
     employee_id = principal.claims.get(settings.entra_employee_id_claim)
+    departments = list(
+        dict.fromkeys(
+            [
+                *_claim_values(principal.claims.get(settings.entra_departments_claim)),
+                *(
+                    department
+                    for project_id in access_context.projects
+                    for department in access_context.project_departments.get(project_id, ())
+                ),
+            ]
+        )
+    )
     return CurrentUserResponse(
         user_id=principal.object_id,
         employee_id=employee_id if isinstance(employee_id, str) else None,
         username=principal.username,
         display_name=principal.display_name,
         email=principal.email,
-        departments=_claim_values(principal.claims.get(settings.entra_departments_claim)),
+        departments=departments,
         assigned_projects=assignments,
     )
 
