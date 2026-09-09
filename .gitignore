@@ -24,6 +24,8 @@ secrets*.json
 # Local SQLite control plane used when Azure SQL is unavailable.
 .local-sql/
 .run/
+.quality-runs/
+.agent-docs/
 
 # Chroma recovery artefacts - never commit
 chroma-data-*/

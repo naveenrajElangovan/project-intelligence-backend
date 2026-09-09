@@ -155,6 +155,7 @@ def test_source_access_and_retrieval_configuration_round_trip() -> None:
         "maxChunksPerSource": 12,
         "rerankTopN": 16,
         "mixedSourceTopN": 12,
+        "rerankScoreThreshold": 0.0,
     }
     try:
         response = TestClient(app).put(
@@ -172,6 +173,7 @@ def test_source_access_and_retrieval_configuration_round_trip() -> None:
         "department:POS_BOT:STORE_OPERATIONS"
     )
     assert store.project.retrieval_profile.max_chunks_per_source == 12
+    assert store.project.retrieval_profile.rerank_score_threshold == 0.0
 
 
 def test_source_access_rule_cannot_name_another_project() -> None:

@@ -185,6 +185,9 @@ def _project(record: ProjectRecord) -> ProjectDefinition:
                 max_chunks_per_source=int(record.retrieval_profile["maxChunksPerSource"]),
                 rerank_top_n=int(record.retrieval_profile["rerankTopN"]),
                 mixed_source_top_n=int(record.retrieval_profile["mixedSourceTopN"]),
+                rerank_score_threshold=float(
+                    record.retrieval_profile.get("rerankScoreThreshold", 0.10)
+                ),
             )
             if record.retrieval_profile
             else None

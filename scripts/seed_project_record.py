@@ -9,6 +9,12 @@ Idempotent: running it twice updates in place rather than failing on the primary
 key, which makes it safe to re-run after editing the JSON.
 
     .venv/bin/python -m scripts.seed_project_record config/local-project.DEMO.json
+
+To update only retrieval behavior on an existing project, without replacing
+source mappings or access rules:
+
+    .venv/bin/python -m scripts.seed_project_record \
+        config/local-project.DEMO.json --only retrieval-profile
 """
 
 from __future__ import annotations
@@ -27,15 +33,60 @@ from app.infrastructure.sql.models import ProjectRecord
 
 
 REQUIRED = ("projectId", "displayName", "vectorStore")
+RETRIEVAL_PROFILE_FIELDS = (
+    "maxChunksPerSource",
+    "rerankTopN",
+    "mixedSourceTopN",
+    "rerankScoreThreshold",
+)
+
+
+def _validated_retrieval_profile(payload: dict[str, object]) -> dict[str, int | float]:
+    """Return a complete, bounded retrieval profile from a project description.
+
+    A partial update must fail before opening a transaction when the description
+    omits a setting or supplies an invalid value. This prevents an apparently
+    successful profile update from silently restoring global defaults.
+    """
+
+    value = payload.get("retrievalProfile")
+    if not isinstance(value, dict):
+        raise SystemExit("The description must contain a retrievalProfile object.")
+    missing = [field for field in RETRIEVAL_PROFILE_FIELDS if field not in value]
+    if missing:
+        raise SystemExit(f"retrievalProfile is missing: {', '.join(missing)}")
+    integers = {
+        field: int(value[field])
+        for field in (
+            "maxChunksPerSource",
+            "rerankTopN",
+            "mixedSourceTopN",
+        )
+    }
+    if any(number < 1 or number > 50 for number in integers.values()):
+        raise SystemExit("retrievalProfile integer values must be between 1 and 50.")
+    threshold = float(value["rerankScoreThreshold"])
+    if threshold < 0 or threshold > 1:
+        raise SystemExit("rerankScoreThreshold must be between 0 and 1.")
+    return {**integers, "rerankScoreThreshold": threshold}
 
 
 async def _run() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("description", type=Path)
+    parser.add_argument(
+        "--only",
+        choices=("retrieval-profile",),
+        help=(
+            "Update only the named field group on an existing project. "
+            "All source mappings and access rules remain byte-for-byte unchanged."
+        ),
+    )
     arguments = parser.parse_args()
 
     payload = json.loads(arguments.description.read_text(encoding="utf-8"))
-    missing = [key for key in REQUIRED if not payload.get(key)]
+    required = ("projectId",) if arguments.only else REQUIRED
+    missing = [key for key in required if not payload.get(key)]
     if missing:
         raise SystemExit(f"{arguments.description} is missing: {', '.join(missing)}")
 
@@ -55,6 +106,30 @@ async def _run() -> None:
                 )
             )
         ).scalar_one_or_none()
+        if arguments.only and existing is None:
+            raise SystemExit(
+                f"Cannot partially update missing project {payload['projectId']!r}."
+            )
+        if arguments.only == "retrieval-profile":
+            previous_rules = list(existing.source_access_rules or [])
+            existing.retrieval_profile = _validated_retrieval_profile(payload)
+            existing.updated_at = now
+            await session.commit()
+            await session.refresh(existing)
+            if list(existing.source_access_rules or []) != previous_rules:
+                raise RuntimeError("Partial update changed sourceAccessRules.")
+            print(
+                json.dumps(
+                    {
+                        "projectId": payload["projectId"],
+                        "action": "retrieval-profile-updated",
+                        "retrievalProfile": existing.retrieval_profile,
+                        "sourceAccessRulesUnchanged": len(previous_rules),
+                    },
+                    indent=2,
+                )
+            )
+            return
         record = existing or ProjectRecord(
             project_id=str(payload["projectId"]), created_at=now
         )

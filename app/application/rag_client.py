@@ -27,7 +27,7 @@ class RagServiceClient:
         request_id: str = "",
         conversation_history: tuple[dict[str, str], ...] = (),
         conversation_context: dict[str, object] | None = None,
-        retrieval_profile: dict[str, int] | None = None,
+        retrieval_profile: dict[str, int | float] | None = None,
     ) -> dict[str, object]:
         """Request one buffered, verified answer from the RAG service."""
 
@@ -84,7 +84,7 @@ class RagServiceClient:
         request_id: str = "",
         conversation_history: tuple[dict[str, str], ...] = (),
         conversation_context: dict[str, object] | None = None,
-        retrieval_profile: dict[str, int] | None = None,
+        retrieval_profile: dict[str, int | float] | None = None,
     ) -> AsyncIterator[dict[str, object]]:
         """Proxy verified NDJSON events while retaining backend-created policies."""
 
