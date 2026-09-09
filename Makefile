@@ -2,6 +2,7 @@ PYTHON ?= .venv/bin/python
 LINT_IMPORTS ?= .venv/bin/lint-imports
 QUALITY_PATHS := app tests scripts migrations
 STRICT_MYPY_MODULES := app/application/chat_policy.py app/auth/models.py app/authorization/models.py app/telemetry.py
+export PI_DATABASE_URL ?= sqlite+aiosqlite:////tmp/project-intelligence-backend-quality.db
 
 .PHONY: check lint format-check type-check imports test
 
