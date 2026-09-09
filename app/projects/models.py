@@ -59,12 +59,14 @@ class RetrievalProfile:
     max_chunks_per_source: int
     rerank_top_n: int
     mixed_source_top_n: int
+    rerank_score_threshold: float = 0.10
 
-    def as_payload(self) -> dict[str, int]:
+    def as_payload(self) -> dict[str, int | float]:
         return {
             "maxChunksPerSource": self.max_chunks_per_source,
             "rerankTopN": self.rerank_top_n,
             "mixedSourceTopN": self.mixed_source_top_n,
+            "rerankScoreThreshold": self.rerank_score_threshold,
         }
 
 

@@ -103,6 +103,9 @@ class RetrievalProfileConfiguration(BaseModel):
     max_chunks_per_source: int = Field(alias="maxChunksPerSource", ge=1, le=50)
     rerank_top_n: int = Field(alias="rerankTopN", ge=1, le=50)
     mixed_source_top_n: int = Field(alias="mixedSourceTopN", ge=1, le=50)
+    rerank_score_threshold: float = Field(
+        default=0.10, alias="rerankScoreThreshold", ge=0.0, le=1.0
+    )
 
 
 class ProjectConfigurationRequest(BaseModel):
@@ -230,6 +233,7 @@ async def put_project_configuration(
                 max_chunks_per_source=body.retrieval_profile.max_chunks_per_source,
                 rerank_top_n=body.retrieval_profile.rerank_top_n,
                 mixed_source_top_n=body.retrieval_profile.mixed_source_top_n,
+                rerank_score_threshold=body.retrieval_profile.rerank_score_threshold,
             )
             if body.retrieval_profile is not None
             else None
@@ -391,6 +395,7 @@ def _response(project: ProjectDefinition) -> ProjectConfigurationResponse:
                 max_chunks_per_source=project.retrieval_profile.max_chunks_per_source,
                 rerank_top_n=project.retrieval_profile.rerank_top_n,
                 mixed_source_top_n=project.retrieval_profile.mixed_source_top_n,
+                rerank_score_threshold=project.retrieval_profile.rerank_score_threshold,
             )
             if project.retrieval_profile is not None
             else None

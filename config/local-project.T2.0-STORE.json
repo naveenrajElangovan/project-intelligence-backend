@@ -93,6 +93,12 @@
       "accessPolicyId": "department:T2.0-STORE:STORE_OPERATIONS"
     }
   ],
+  "retrievalProfile": {
+    "maxChunksPerSource": 6,
+    "rerankTopN": 16,
+    "mixedSourceTopN": 12,
+    "rerankScoreThreshold": 0.0
+  },
   "ingestionSchedule": {
     "githubMergedPrEnabled": false,
     "dailyEnabled": false,
