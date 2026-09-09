@@ -1,0 +1,28 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-lint
+        name: Ruff lint
+        entry: make lint
+        language: system
+        pass_filenames: false
+      - id: ruff-format-ratchet
+        name: Ruff format ratchet
+        entry: make format-check
+        language: system
+        pass_filenames: false
+      - id: mypy-ratchet
+        name: mypy strict modules and repository ratchet
+        entry: make type-check
+        language: system
+        pass_filenames: false
+      - id: import-boundaries
+        name: Import architecture contracts
+        entry: make imports
+        language: system
+        pass_filenames: false
+      - id: tests-and-coverage
+        name: Tests and coverage gate
+        entry: make test
+        language: system
+        pass_filenames: false
