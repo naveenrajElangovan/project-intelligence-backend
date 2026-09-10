@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     chat_mongodb_database: str = "project_intelligence_chat"
     chat_retention_days: int = 30
     chat_history_turns: int = 3
+    evaluation_service_bus_namespace: str = ""
+    evaluation_service_bus_queue: str = "ai-evaluations"
+    evaluation_managed_identity_client_id: str = ""
+    evaluation_internal_api_key: str = ""
 
     entra_tenant_id: str = ""
     entra_audience: str = ""
@@ -135,6 +139,8 @@ class Settings(BaseSettings):
             raise ValueError(
                 "PI_RAG_MAX_KEEPALIVE_CONNECTIONS must be between 1 and PI_RAG_MAX_CONNECTIONS"
             )
+        if not self.evaluation_service_bus_queue.strip():
+            raise ValueError("PI_EVALUATION_SERVICE_BUS_QUEUE must not be empty")
         if not 1 <= self.rag_keepalive_expiry_seconds <= 300:
             raise ValueError("PI_RAG_KEEPALIVE_EXPIRY_SECONDS must be between 1 and 300")
         if not self.is_production:
@@ -152,6 +158,9 @@ class Settings(BaseSettings):
             "PI_RAG_INTERNAL_API_KEY": self.rag_internal_api_key,
             "PI_INGESTION_INTERNAL_API_KEY": self.ingestion_internal_api_key,
             "PI_TELEMETRY_HMAC_KEY": self.telemetry_hmac_key,
+            "PI_EVALUATION_SERVICE_BUS_NAMESPACE": self.evaluation_service_bus_namespace,
+            "PI_EVALUATION_MANAGED_IDENTITY_CLIENT_ID": self.evaluation_managed_identity_client_id,
+            "PI_EVALUATION_INTERNAL_API_KEY": self.evaluation_internal_api_key,
         }
         errors.extend(name for name, value in required.items() if not value.strip())
         if self.docs_enabled:
@@ -204,6 +213,8 @@ class Settings(BaseSettings):
             errors.append("PI_INGESTION_INTERNAL_API_KEY must contain at least 32 characters")
         if len(self.telemetry_hmac_key) < 32:
             errors.append("PI_TELEMETRY_HMAC_KEY must contain at least 32 characters")
+        if len(self.evaluation_internal_api_key) < 32:
+            errors.append("PI_EVALUATION_INTERNAL_API_KEY must contain at least 32 characters")
         if errors:
             raise ValueError("Unsafe production configuration: " + "; ".join(errors))
         return self

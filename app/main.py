@@ -13,6 +13,7 @@ from app.api.internal_ingestion import router as internal_ingestion_router
 from app.api.me import router as me_router
 from app.api.project_configuration import router as project_configuration_router
 from app.api.projects import router as projects_router
+from app.api.evaluations import router as evaluations_router
 from app.config import get_settings
 from app.conversations.dependencies import get_conversation_store
 from app import metrics
@@ -86,5 +87,6 @@ def create_app() -> FastAPI:
     application.include_router(internal_ingestion_router)
     application.include_router(projects_router)
     application.include_router(chat_router)
+    application.include_router(evaluations_router)
     return application
 app = create_app()

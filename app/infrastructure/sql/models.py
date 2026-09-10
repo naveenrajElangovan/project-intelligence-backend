@@ -119,3 +119,21 @@ class ProjectMembershipRecord(Base):
     authority: Mapped[str] = mapped_column(String(50), nullable=False, default="MICROSOFT_GRAPH")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_verified_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+
+class EvaluationRunRecord(Base):
+    """Durable, project-scoped state for one asynchronous evaluation request."""
+
+    __tablename__ = "evaluation_runs"
+
+    run_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False, index=True)
+    requested_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    evaluator_suite_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    request_payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    phoenix_experiment_reference: Mapped[str | None] = mapped_column(String(500))
+    aggregate_scores: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    typed_failures: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
