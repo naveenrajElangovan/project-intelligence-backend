@@ -173,7 +173,8 @@ echo "Chroma is healthy."
 # terminated by the OS or a terminal session, which previously made every
 # project fail at embedding or reranking while the containers still looked up.
 # The container already mounts the same pinned models and safely uses CPU.
-use_host_accelerator="${PI_RAG_USE_HOST_ACCELERATOR:-false}"
+use_host_accelerator="${PI_RAG_USE_HOST_ACCELERATOR:-$(read_env_value PI_RAG_USE_HOST_ACCELERATOR)}"
+use_host_accelerator="${use_host_accelerator:-false}"
 accelerator_key_file="${RAG_DIRECTORY}/.run/accelerator.key"
 if [[ "${use_host_accelerator}" == "true" ]]; then
   "${RAG_DIRECTORY}/scripts/start_accelerator_macos.sh"

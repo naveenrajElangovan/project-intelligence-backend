@@ -145,6 +145,9 @@ services:
       # inside this container.  A host accelerator is an explicit opt-in because
       # losing that background process must not stop every project's answers.
       PI_RAG_LOCAL_ACCELERATOR_URL: ${PI_RAG_LOCAL_ACCELERATOR_RUNTIME_URL:-}
+      # Keep query embeddings on CPU so candidate selection remains identical
+      # to the vectors created during ingestion; accelerate cross-encoders only.
+      PI_RAG_LOCAL_ACCELERATOR_EMBEDDING_ENABLED: ${PI_RAG_LOCAL_ACCELERATOR_EMBEDDING_ENABLED:-true}
       PI_RAG_INTERNAL_API_KEY: ${PI_RAG_INTERNAL_API_KEY:-}
       PI_RAG_OPENINFERENCE_ENABLED: "true"
       PI_RAG_OPENINFERENCE_OTLP_ENDPOINT: http://host.docker.internal:4318/v1/traces
