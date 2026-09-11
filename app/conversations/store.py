@@ -48,6 +48,7 @@ def _safe_structured_scope(value: object) -> dict[str, object] | None:
         "fixed",
         "issue_key",
         "section_kind",
+        "topic",
     }
     raw_filters = value.get("filters", {})
     if not isinstance(raw_filters, dict) or len(raw_filters) > 8:
