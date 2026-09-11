@@ -28,6 +28,7 @@ class RagServiceClient:
         conversation_history: tuple[dict[str, str], ...] = (),
         conversation_context: dict[str, object] | None = None,
         retrieval_profile: dict[str, int | float] | None = None,
+        evaluation: bool = False,
     ) -> dict[str, object]:
         """Request one buffered, verified answer from the RAG service."""
 
@@ -56,6 +57,8 @@ class RagServiceClient:
             }
             if retrieval_profile is not None:
                 payload["retrievalProfile"] = retrieval_profile
+            if evaluation:
+                payload["evaluation"] = True
             response = await client.post(
                 f"{self._settings.rag_service_url.rstrip('/')}/v1/answer",
                 headers=headers,
@@ -69,6 +72,25 @@ class RagServiceClient:
         finally:
             if owns_client:
                 await client.aclose()
+
+    async def verify_evaluation_snapshot(self, target) -> None:
+        """Recheck the operator-pinned inventory without returning source text."""
+        async with httpx.AsyncClient(timeout=65) as client:
+            response = await client.post(
+                f"{self._settings.rag_service_url.rstrip('/')}/v1/internal/evaluation-snapshot",
+                headers={"Authorization": f"Bearer {self._settings.rag_internal_api_key}"},
+                json={"project_id": target.project_id, "ingestion_run_id": target.ingestion_run_id},
+            )
+            response.raise_for_status()
+            snapshot = response.json()
+            for field in (
+                "inventory_sha256",
+                "contract_sha256",
+                "embedding_model",
+                "schema_version",
+            ):
+                if snapshot.get(field) != getattr(target, field):
+                    raise ValueError("Staging inventory changed after target registration.")
 
     async def stream_answer(
         self,

@@ -20,6 +20,17 @@ class SqlProjectRepository:
     def __init__(self, session_factory: async_sessionmaker) -> None:
         self._sessions = session_factory
 
+    async def list_active(self) -> tuple[ProjectDefinition, ...]:
+        async with self._sessions() as session:
+            records = (
+                await session.scalars(
+                    select(ProjectRecord)
+                    .where(ProjectRecord.active == 1)
+                    .order_by(ProjectRecord.project_id)
+                )
+            ).all()
+            return tuple(_project(record) for record in records)
+
     async def get(self, project_id: str) -> ProjectDefinition | None:
         async with self._sessions() as session:
             record = await session.get(ProjectRecord, project_id)
@@ -120,9 +131,7 @@ def _record_values(project: ProjectDefinition) -> dict[str, object]:
             for rule in project.source_access_rules
         ],
         "retrieval_profile": (
-            project.retrieval_profile.as_payload()
-            if project.retrieval_profile is not None
-            else {}
+            project.retrieval_profile.as_payload() if project.retrieval_profile is not None else {}
         ),
     }
 

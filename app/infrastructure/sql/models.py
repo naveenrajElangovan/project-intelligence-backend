@@ -1,6 +1,15 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, TypeDecorator, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    TypeDecorator,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -45,17 +54,23 @@ class ProjectRecord(Base):
     project_id: Mapped[str] = mapped_column(String(100), primary_key=True)
     display_name: Mapped[str] = mapped_column(String(200), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    jira_projects: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
-    confluence_spaces: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
-    github_repositories: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
+    jira_projects: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    confluence_spaces: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    github_repositories: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     vector_store: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
-    ingestion_schedule: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    ingestion_schedule: Mapped[dict[str, object]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     source_access_rules: Mapped[list[dict[str, object]]] = mapped_column(
         JSON, nullable=False, default=list
     )
-    retrieval_profile: Mapped[dict[str, object]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
+    retrieval_profile: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
 
@@ -112,7 +127,9 @@ class ProjectMembershipRecord(Base):
     __table_args__ = (UniqueConstraint("user_id", "project_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("authenticated_users.object_id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("authenticated_users.object_id"), nullable=False
+    )
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
     role: Mapped[str] = mapped_column(String(100), nullable=False)
     access_policy_id: Mapped[str] = mapped_column(String(220), nullable=False)
@@ -127,13 +144,39 @@ class EvaluationRunRecord(Base):
     __tablename__ = "evaluation_runs"
 
     run_id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.project_id"), nullable=False, index=True
+    )
     requested_by: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False)
     evaluator_suite_version: Mapped[str] = mapped_column(String(80), nullable=False)
     request_payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     phoenix_experiment_reference: Mapped[str | None] = mapped_column(String(500))
     aggregate_scores: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
-    typed_failures: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
+    typed_failures: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+
+class EvaluationTargetRecord(Base):
+    """Operator-created, immutable target; public requests carry only its ID."""
+
+    __tablename__ = "evaluation_targets"
+    target_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.project_id"), nullable=False)
+    manifest: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+
+class EvaluationCaseRecord(Base):
+    """Insert-before-execution claim prevents duplicate generation on retry."""
+
+    __tablename__ = "evaluation_cases"
+    run_id: Mapped[str] = mapped_column(ForeignKey("evaluation_runs.run_id"), primary_key=True)
+    case_id: Mapped[str] = mapped_column(String(160), primary_key=True)
+    policy_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    response: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)

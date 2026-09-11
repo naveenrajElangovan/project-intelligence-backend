@@ -51,6 +51,7 @@ services:
       - path: .env
         required: true
     environment:
+      PI_ENVIRONMENT: development
       PI_RAG_SERVICE_URL: ${PI_RAG_RUNTIME_URL:-http://rag:8002}
       PI_RAG_INTERNAL_API_KEY: ${PI_RAG_INTERNAL_API_KEY:-}
       PI_CHAT_MONGODB_URL: ${PI_CHAT_MONGODB_DOCKER_URL:?set authenticated MongoDB URL}
@@ -90,6 +91,7 @@ services:
       - path: ../project-intelligence-ingestion/.env
         required: true
     environment:
+      PI_INGEST_ENVIRONMENT: development
       PI_INGEST_CONTROL_PLANE_URL: http://api:8000
       PI_INGEST_METRICS_PUSHGATEWAY_URL: ${PI_INGEST_METRICS_PUSHGATEWAY_URL:-http://pushgateway:9091}
       PI_INGEST_CHROMA_HOST: chroma
@@ -114,6 +116,7 @@ services:
       - path: ../project-intelligence-ingestion/.env
         required: true
     environment:
+      PI_INGEST_ENVIRONMENT: development
       PI_INGEST_CONTROL_PLANE_URL: http://api:8000
       PI_INGEST_METRICS_PUSHGATEWAY_URL: ${PI_INGEST_METRICS_PUSHGATEWAY_URL:-http://pushgateway:9091}
     restart: unless-stopped
@@ -135,6 +138,7 @@ services:
       - path: ../project-intelligence-rag/.env
         required: true
     environment:
+      PI_RAG_ENVIRONMENT: development
       PI_RAG_CHROMA_HOST: chroma
       PI_RAG_OLLAMA_BASE_URL: http://host.docker.internal:11434
       PI_RAG_LOCAL_MODELS_PATH: /models/bge-reranker-v2-m3
