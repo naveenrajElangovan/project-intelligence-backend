@@ -46,6 +46,8 @@ def _safe_structured_scope(value: object) -> dict[str, object] | None:
         "issue_type",
         "priority",
         "fixed",
+        "issue_key",
+        "section_kind",
     }
     raw_filters = value.get("filters", {})
     if not isinstance(raw_filters, dict) or len(raw_filters) > 8:
@@ -59,7 +61,14 @@ def _safe_structured_scope(value: object) -> dict[str, object] | None:
             return None
         filters[str(key)] = values
     operation = str(value.get("operation") or "")
-    if operation not in {"COUNT", "LIST", "DISTRIBUTION"}:
+    if operation not in {
+        "COUNT",
+        "LIST",
+        "DISTRIBUTION",
+        "DETAIL",
+        "SECTION",
+        "SECTION_COUNT",
+    }:
         return None
     try:
         page_size = min(500, max(1, int(value.get("pageSize") or 50)))

@@ -5,6 +5,7 @@ from app.conversations.store import (
     ConversationContextRecord,
     MongoConversationStore,
     PendingTurn,
+    _safe_structured_scope,
 )
 
 
@@ -302,6 +303,26 @@ def test_version_three_structured_scope_round_trips_to_rag_payload() -> None:
         "fixed": ["AUTO"],
     }
     assert context.as_payload()["structuredScope"] == context.structured_scope
+
+
+def test_jira_section_scope_is_validated_for_follow_up_paging() -> None:
+    scope = _safe_structured_scope(
+        {
+            "provider": "JIRA",
+            "filters": {
+                "issue_key": ["T0-13"],
+                "section_kind": ["COMMENT"],
+            },
+            "operation": "SECTION",
+            "pageSize": 20,
+            "nextOffset": 20,
+            "complete": True,
+        }
+    )
+
+    assert scope is not None
+    assert scope["operation"] == "SECTION"
+    assert scope["filters"]["issue_key"] == ["T0-13"]
 
 
 def test_conversation_listing_applies_requested_page_offset_and_limit() -> None:
