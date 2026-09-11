@@ -62,6 +62,7 @@ def _safe_structured_scope(value: object) -> dict[str, object] | None:
         filters[str(key)] = values
     operation = str(value.get("operation") or "")
     if operation not in {
+        "OVERVIEW",
         "COUNT",
         "LIST",
         "DISTRIBUTION",

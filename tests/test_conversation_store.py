@@ -325,6 +325,24 @@ def test_jira_section_scope_is_validated_for_follow_up_paging() -> None:
     assert scope["filters"]["issue_key"] == ["T0-13"]
 
 
+def test_jira_overview_scope_is_preserved() -> None:
+    scope = _safe_structured_scope(
+        {
+            "provider": "JIRA",
+            "resourceType": "ISSUE",
+            "filters": {},
+            "operation": "OVERVIEW",
+            "complete": True,
+            "pageSize": 50,
+            "nextOffset": 0,
+            "activeSubject": "Jira project overview",
+        }
+    )
+
+    assert scope is not None
+    assert scope["operation"] == "OVERVIEW"
+
+
 def test_conversation_listing_applies_requested_page_offset_and_limit() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
     conversations = PagedConversationsCollection()
