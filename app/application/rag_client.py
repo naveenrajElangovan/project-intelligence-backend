@@ -29,6 +29,7 @@ class RagServiceClient:
         conversation_context: dict[str, object] | None = None,
         retrieval_profile: dict[str, int | float] | None = None,
         evaluation: bool = False,
+        enabled_providers: tuple[str, ...] | None = None,
     ) -> dict[str, object]:
         """Request one buffered, verified answer from the RAG service."""
 
@@ -57,6 +58,8 @@ class RagServiceClient:
             }
             if retrieval_profile is not None:
                 payload["retrievalProfile"] = retrieval_profile
+            if enabled_providers is not None:
+                payload["enabledProviders"] = list(enabled_providers)
             if evaluation:
                 payload["evaluation"] = True
             response = await client.post(
@@ -107,6 +110,7 @@ class RagServiceClient:
         conversation_history: tuple[dict[str, str], ...] = (),
         conversation_context: dict[str, object] | None = None,
         retrieval_profile: dict[str, int | float] | None = None,
+        enabled_providers: tuple[str, ...] | None = None,
     ) -> AsyncIterator[dict[str, object]]:
         """Proxy verified NDJSON events while retaining backend-created policies."""
 
@@ -137,6 +141,8 @@ class RagServiceClient:
         }
         if retrieval_profile is not None:
             payload["retrievalProfile"] = retrieval_profile
+        if enabled_providers is not None:
+            payload["enabledProviders"] = list(enabled_providers)
         try:
             async with client.stream(
                 "POST",

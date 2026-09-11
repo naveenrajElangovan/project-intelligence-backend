@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.conversations.models import ConversationHistoryRecord, ConversationSummaryRecord
 
 
-
 # A prose question is interpolated into prompts, stored as conversation history,
 # and rewritten by the planner, so it stays small. A pasted JSON document is
 # none of those: the RAG converts it deterministically before its graph runs and
@@ -30,9 +29,7 @@ def _looks_like_payload(question: str) -> bool:
         return True
     if stripped.startswith("```"):
         stripped = stripped.strip("`")
-        stripped = (
-            stripped[4:].strip() if stripped[:4].lower() == "json" else stripped.strip()
-        )
+        stripped = stripped[4:].strip() if stripped[:4].lower() == "json" else stripped.strip()
     opener, closer = stripped[:1], stripped[-1:]
     if (opener, closer) in {("{", "}"), ("[", "]")}:
         return True
@@ -40,10 +37,15 @@ def _looks_like_payload(question: str) -> bool:
 
 
 class ChatRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     question: str = Field(min_length=2, max_length=MAX_PAYLOAD_QUESTION_CHARACTERS)
     mode: Literal["ASK", "ANALYZE", "DEEP_ANALYSIS"] = "ASK"
     conversation_id: str | None = Field(
         default=None, alias="conversationId", min_length=36, max_length=36
+    )
+    enabled_providers: list[Literal["JIRA", "GITHUB", "CONFLUENCE"]] | None = Field(
+        default=None, alias="enabledProviders", min_length=1, max_length=3
     )
 
     @model_validator(mode="after")
@@ -54,6 +56,10 @@ class ChatRequest(BaseModel):
                 f"{MAX_PROSE_QUESTION_CHARACTERS} characters only when it is a "
                 "single JSON document"
             )
+        if self.enabled_providers is not None and len(set(self.enabled_providers)) != len(
+            self.enabled_providers
+        ):
+            raise ValueError("enabledProviders must not contain duplicates")
         return self
 
 
@@ -64,6 +70,16 @@ class SourceReference(BaseModel):
     url: str | None = None
     locator: str | None = None
     language: str | None = None
+
+
+class ResultPage(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    start: int = Field(ge=0)
+    end: int = Field(ge=0)
+    returned: int = Field(ge=0)
+    total: int = Field(ge=0)
+    has_more: bool = Field(alias="hasMore")
 
 
 class ChatResponse(BaseModel):
@@ -80,14 +96,11 @@ class ChatResponse(BaseModel):
     missing_information: list[str] = Field(alias="missingInformation")
     evidence_status: str = Field(default="UNKNOWN", alias="evidenceStatus")
     context_quality: str = Field(default="UNKNOWN", alias="contextQuality")
-    context_relevance: float = Field(
-        default=0.0, alias="contextRelevance", ge=0.0, le=1.0
-    )
-    context_completeness: float = Field(
-        default=0.0, alias="contextCompleteness", ge=0.0, le=1.0
-    )
+    context_relevance: float = Field(default=0.0, alias="contextRelevance", ge=0.0, le=1.0)
+    context_completeness: float = Field(default=0.0, alias="contextCompleteness", ge=0.0, le=1.0)
     degradation: list[str] = Field(default_factory=list)
     conversation_id: str = Field(alias="conversationId")
+    result_page: ResultPage | None = Field(default=None, alias="resultPage")
 
 
 class ConversationSummaryResponse(BaseModel):
@@ -145,6 +158,8 @@ def chat_response(
 
     sources = response.get("sources", [])
     missing_information = response.get("missingInformation", [])
+    raw_page = response.get("resultPage")
+    result_page = ResultPage.model_validate(raw_page) if isinstance(raw_page, dict) else None
     return ChatResponse(
         answer=str(
             response.get("answer")
@@ -177,4 +192,5 @@ def chat_response(
         degradation=[str(value) for value in response.get("degradation", [])]
         if isinstance(response.get("degradation", []), list)
         else [],
+        resultPage=result_page,
     )

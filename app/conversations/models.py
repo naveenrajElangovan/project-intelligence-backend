@@ -20,13 +20,14 @@ class HistoryMessage:
 class ConversationContextRecord:
     """Bounded semantic memory; it is never authoritative retrieval evidence."""
 
-    version: int = 2
+    version: int = 3
     summary: str = ""
     active_subject: str = ""
     entities: tuple[dict[str, str], ...] = ()
     last_intent: str = ""
     last_resolved_question: str = ""
     state_revision: int = 0
+    structured_scope: dict[str, object] | None = None
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -37,6 +38,7 @@ class ConversationContextRecord:
             "lastIntent": self.last_intent,
             "lastResolvedQuestion": self.last_resolved_question,
             "stateRevision": self.state_revision,
+            "structuredScope": self.structured_scope,
         }
 
 

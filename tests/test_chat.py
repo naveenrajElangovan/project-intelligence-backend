@@ -1,9 +1,11 @@
 import json
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
 from app.api import chat as chat_api
+from app.api.chat_contracts import chat_response
 from app.auth.dependencies import get_current_principal
 from app.auth.models import EntraPrincipal
 from app.authorization.dependencies import get_graph_project_access_reader
@@ -32,6 +34,30 @@ class AccessReader:
         )
 
 
+def test_jira_result_page_is_preserved_for_public_clients() -> None:
+    response = chat_response(
+        "DEMO",
+        "00000000-0000-0000-0000-000000000001",
+        {
+            "answer": "Jira has 60 tickets. Showing 1-50 of 60.",
+            "confidence": "HIGH",
+            "sources": [],
+            "missingInformation": [],
+            "resultPage": {
+                "start": 1,
+                "end": 50,
+                "returned": 50,
+                "total": 60,
+                "hasMore": True,
+            },
+        },
+    )
+
+    assert response.result_page is not None
+    assert response.result_page.total == 60
+    assert response.result_page.has_more is True
+
+
 class ProjectStore:
     async def get(self, project_id: str):
         if project_id != "DEMO":
@@ -39,6 +65,9 @@ class ProjectStore:
 
         class Project:
             vector_store = VectorStoreRoute("project-intelligence", "chunk_text")
+            jira_projects = (object(),)
+            confluence_spaces = (object(),)
+            github_repositories = (object(),)
 
         return Project()
 
@@ -85,9 +114,9 @@ class ConversationStore:
             "project_id": "DEMO",
             "conversation_id": "00000000-0000-0000-0000-000000000001",
         }
-        summary = (await self.list_conversations(
-            owner_id="user-id", project_id="DEMO", limit=50, offset=0
-        ))[0]
+        summary = (
+            await self.list_conversations(owner_id="user-id", project_id="DEMO", limit=50, offset=0)
+        )[0]
         return ConversationHistoryRecord(
             conversation=summary,
             messages=(
@@ -167,9 +196,7 @@ def test_conversations_restore_for_stable_entra_owner_after_new_session() -> Non
     assert first_session.status_code == 200
     assert second_session.status_code == 200
     assert first_session.json() == second_session.json()
-    assert first_session.json()[0]["conversationId"] == (
-        "00000000-0000-0000-0000-000000000001"
-    )
+    assert first_session.json()[0]["conversationId"] == ("00000000-0000-0000-0000-000000000001")
 
 
 def test_new_chat_creates_a_server_owned_conversation_id() -> None:
@@ -256,6 +283,7 @@ def test_chat_passes_only_backend_created_policies(monkeypatch) -> None:
         request_id,
         conversation_history,
         conversation_context,
+        enabled_providers=None,
     ):
         assert project_id == "DEMO"
         assert policies == ("project:DEMO", "user:user-id", "role:DEMO:DEVELOPER")
@@ -268,20 +296,20 @@ def test_chat_passes_only_backend_created_policies(monkeypatch) -> None:
         assert request_id
         assert conversation_history == ()
         assert conversation_context == {
-            "version": 2,
+            "version": 3,
             "summary": "",
             "activeSubject": "",
             "entities": [],
             "lastIntent": "",
             "lastResolvedQuestion": "",
             "stateRevision": 0,
+            "structuredScope": None,
         }
+        assert enabled_providers is None
         return {
             "answer": "Grounded answer.",
             "confidence": "HIGH",
-            "sources": [
-                {"type": "CODE", "title": "main.py", "reference": "repo:main.py:1-10"}
-            ],
+            "sources": [{"type": "CODE", "title": "main.py", "reference": "repo:main.py:1-10"}],
             "missingInformation": [],
             "evidenceStatus": "SUFFICIENT",
             "contextQuality": "SUFFICIENT",
@@ -335,29 +363,38 @@ def test_chat_missing_answer_is_not_reported_as_authorization_denial(monkeypatch
 def test_context_update_is_accepted_only_for_verified_answered_responses() -> None:
     update = {"standaloneQuestion": "How does Atlas work?"}
 
-    assert chat_api._successful_context_update(
-        {"status": "ANSWERED", "confidence": "HIGH", "conversationContextUpdate": update}
-    ) == update
-    assert chat_api._successful_context_update(
-        {
-            "status": "INSUFFICIENT_EVIDENCE",
-            "confidence": "NONE",
-            "conversationContextUpdate": update,
-        }
-    ) is None
-    assert chat_api._successful_context_update(
-        {
-            "status": "NEEDS_CLARIFICATION",
-            "confidence": "NONE",
-            "conversationContextUpdate": update,
-        }
-    ) is None
+    assert (
+        chat_api._successful_context_update(
+            {"status": "ANSWERED", "confidence": "HIGH", "conversationContextUpdate": update}
+        )
+        == update
+    )
+    assert (
+        chat_api._successful_context_update(
+            {
+                "status": "INSUFFICIENT_EVIDENCE",
+                "confidence": "NONE",
+                "conversationContextUpdate": update,
+            }
+        )
+        is None
+    )
+    assert (
+        chat_api._successful_context_update(
+            {
+                "status": "NEEDS_CLARIFICATION",
+                "confidence": "NONE",
+                "conversationContextUpdate": update,
+            }
+        )
+        is None
+    )
 
 
 def test_chat_stream_preserves_server_created_policies_and_verified_events(monkeypatch) -> None:
     configure(("DEMO",))
 
-    async def stream_answer(self, project_id, question, policies, *args):
+    async def stream_answer(self, project_id, question, policies, *args, **kwargs):
         assert project_id == "DEMO"
         assert question == "What does POS do?"
         assert policies == ("project:DEMO", "user:user-id", "role:DEMO:DEVELOPER")
@@ -417,3 +454,46 @@ def test_chat_stream_preserves_server_created_policies_and_verified_events(monke
     assert events[3]["provisionalText"] == "Grounded answer [SOURCE 1]."
     assert events[4]["claimIndex"] == 2
     assert events[-1]["response"]["answer"] == "Grounded answer."
+
+
+def test_selected_providers_are_validated_and_forwarded(monkeypatch) -> None:
+    configure(("DEMO",))
+    observed = None
+
+    async def answer(*args, **kwargs):
+        nonlocal observed
+        observed = kwargs.get("enabled_providers")
+        return {
+            "answer": "Jira answer.",
+            "confidence": "HIGH",
+            "sources": [],
+            "missingInformation": [],
+        }
+
+    monkeypatch.setattr(chat_api.RagServiceClient, "answer", answer)
+    try:
+        accepted = TestClient(app).post(
+            "/v1/projects/DEMO/chat",
+            headers={"Authorization": "Bearer test"},
+            json={"question": "How many Jira tickets?", "enabledProviders": ["JIRA"]},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert accepted.status_code == 200
+    assert observed == ("JIRA",)
+
+
+def test_unconfigured_provider_selection_is_rejected() -> None:
+    project = SimpleNamespace(
+        jira_projects=(object(),),
+        confluence_spaces=(),
+        github_repositories=(),
+    )
+
+    try:
+        chat_api._enabled_providers(project, ["CONFLUENCE"])
+    except Exception as error:
+        assert getattr(error, "status_code", None) == 422
+    else:
+        raise AssertionError("unconfigured provider selection was accepted")

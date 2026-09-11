@@ -175,7 +175,8 @@ def test_version_one_context_is_read_as_empty_without_losing_revision() -> None:
 
     context = asyncio.run(store._load_context("owner", "DEMO", "conversation"))
 
-    assert context.version == 2
+    assert context.version == 3
+    assert context.structured_scope is None
     assert context.active_subject == ""
     assert context.last_intent == ""
     assert context.last_resolved_question == ""
@@ -221,15 +222,86 @@ def test_missing_conversation_id_creates_a_distinct_new_chat() -> None:
         "updated_at": now,
         "expires_at": now + store._retention,
         "context": {
-                "version": 2,
+            "version": 3,
             "summary": "",
             "active_subject": "",
             "entities": [],
             "last_intent": "",
             "last_resolved_question": "",
             "state_revision": 0,
+            "structured_scope": None,
         },
     }
+
+
+def test_structured_jira_scope_is_bounded_and_persisted() -> None:
+    store = MongoConversationStore.__new__(MongoConversationStore)
+    conversations = UpdatingConversationsCollection()
+    store._conversations = conversations
+    pending = PendingTurn(
+        "conversation-1", "turn-1", (), ConversationContextRecord(state_revision=7)
+    )
+    scope = {
+        "provider": "JIRA",
+        "resourceType": "ISSUE",
+        "filters": {"labels": ["POS"], "fixed": ["AUTO"]},
+        "operation": "LIST",
+        "groupBy": None,
+        "snapshotAt": "2026-09-11T10:00:00Z",
+        "complete": True,
+        "pageSize": 50,
+        "nextOffset": 50,
+        "activeSubject": "Jira tickets matching POS",
+    }
+
+    asyncio.run(
+        store._update_context(
+            pending,
+            owner_id="owner-1",
+            project_id="DEMO",
+            update={
+                "standaloneQuestion": "what are all fixed?",
+                "activeSubject": "Jira tickets matching POS",
+                "intent": "JIRA_LIST",
+                "resolutionConfidence": 1.0,
+                "structuredScope": scope,
+            },
+        )
+    )
+
+    assert conversations.update["$set"]["context.structured_scope"] == scope
+    assert conversations.update["$set"]["context.version"] == 3
+
+
+def test_version_three_structured_scope_round_trips_to_rag_payload() -> None:
+    store = MongoConversationStore.__new__(MongoConversationStore)
+    store._conversations = ContextCollection(
+        {
+            "version": 3,
+            "active_subject": "Jira tickets matching POS",
+            "last_intent": "JIRA_LIST",
+            "last_resolved_question": "what are all fixed?",
+            "state_revision": 8,
+            "structured_scope": {
+                "provider": "JIRA",
+                "resourceType": "ISSUE",
+                "filters": {"labels": ["POS"], "fixed": ["AUTO"]},
+                "operation": "LIST",
+                "pageSize": 50,
+                "nextOffset": 50,
+                "complete": True,
+            },
+        }
+    )
+
+    context = asyncio.run(store._load_context("owner", "DEMO", "conversation"))
+
+    assert context.structured_scope is not None
+    assert context.structured_scope["filters"] == {
+        "labels": ["POS"],
+        "fixed": ["AUTO"],
+    }
+    assert context.as_payload()["structuredScope"] == context.structured_scope
 
 
 def test_conversation_listing_applies_requested_page_offset_and_limit() -> None:

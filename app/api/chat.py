@@ -33,6 +33,25 @@ from app.telemetry import chat_event, pseudonymous_user, request_id, started
 router = APIRouter(prefix="/v1/projects", tags=["chat"])
 
 
+def _enabled_providers(project, requested: list[str] | None) -> tuple[str, ...] | None:
+    """Validate client source selection against server-owned project mappings."""
+
+    if requested is None:
+        return None
+    available = {
+        *({"JIRA"} if project.jira_projects else set()),
+        *({"CONFLUENCE"} if project.confluence_spaces else set()),
+        *({"GITHUB"} if project.github_repositories else set()),
+    }
+    unavailable = sorted(set(requested).difference(available))
+    if unavailable:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "The selected provider is not available for this project.",
+        )
+    return tuple(requested)
+
+
 def _rag_service_client(request: Request, settings: Settings) -> RagServiceClient:
     """Reuse the app-owned HTTP pool while remaining usable in isolated tests."""
 
@@ -181,6 +200,7 @@ async def project_chat(
     project = await project_store.get(project_id)
     if project is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "The project is not configured.")
+    enabled_providers = _enabled_providers(project, body.enabled_providers)
 
     # The backend, never the client, creates the retrieval policies.
     policies = _retrieval_policies(
@@ -205,8 +225,7 @@ async def project_chat(
             model_profile,
             correlation_id,
             tuple(
-                {"role": message.role, "content": message.content}
-                for message in pending.history
+                {"role": message.role, "content": message.content} for message in pending.history
             ),
             pending.context.as_payload(),
             **(
@@ -214,6 +233,7 @@ async def project_chat(
                 if getattr(project, "retrieval_profile", None) is not None
                 else {}
             ),
+            enabled_providers=enabled_providers,
         )
     except (httpx.HTTPError, ValueError, KeyError) as failure:
         chat_event(
@@ -286,6 +306,7 @@ async def project_chat_stream(
     project = await project_store.get(project_id)
     if project is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "The project is not configured.")
+    enabled_providers = _enabled_providers(project, body.enabled_providers)
     policies = _retrieval_policies(
         project_id,
         principal.object_id,
@@ -324,13 +345,12 @@ async def project_chat_stream(
                     if getattr(project, "retrieval_profile", None) is not None
                     else {}
                 ),
+                enabled_providers=enabled_providers,
             ):
                 event_type = event.get("type")
                 if event_type == "complete" and isinstance(event.get("response"), dict):
                     private_response = event["response"]
-                    result = _chat_response(
-                        project_id, pending.conversation_id, private_response
-                    )
+                    result = _chat_response(project_id, pending.conversation_id, private_response)
                     await conversation_store.complete_turn(
                         pending,
                         owner_id=principal.object_id,
@@ -359,13 +379,16 @@ async def project_chat_stream(
                     continue
                 yield json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n"
         except (httpx.HTTPError, ValueError, KeyError, json.JSONDecodeError):
-            yield json.dumps(
-                {
-                    "type": "error",
-                    "message": "I couldn't complete that project search right now. Please try again.",
-                },
-                separators=(",", ":"),
-            ) + "\n"
+            yield (
+                json.dumps(
+                    {
+                        "type": "error",
+                        "message": "I couldn't complete that project search right now. Please try again.",
+                    },
+                    separators=(",", ":"),
+                )
+                + "\n"
+            )
         finally:
             if not completed:
                 await conversation_store.abandon_turn(

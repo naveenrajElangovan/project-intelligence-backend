@@ -31,6 +31,58 @@ def _stored_text(value: str) -> str:
     return f"{value[:MAX_STORED_TURN_CHARACTERS]}\n[truncated: {omitted} more characters]"
 
 
+def _safe_structured_scope(value: object) -> dict[str, object] | None:
+    """Validate provider query memory before it enters the server-owned context."""
+
+    if not isinstance(value, dict) or value.get("provider") != "JIRA":
+        return None
+    allowed_filters = {
+        "labels",
+        "status",
+        "status_category",
+        "status_category_key",
+        "resolution",
+        "resolution_id",
+        "issue_type",
+        "priority",
+        "fixed",
+    }
+    raw_filters = value.get("filters", {})
+    if not isinstance(raw_filters, dict) or len(raw_filters) > 8:
+        return None
+    filters: dict[str, list[str]] = {}
+    for key, raw_values in raw_filters.items():
+        if key not in allowed_filters or not isinstance(raw_values, (list, tuple)):
+            return None
+        values = [str(item).strip()[:200] for item in raw_values[:20] if str(item).strip()]
+        if not values:
+            return None
+        filters[str(key)] = values
+    operation = str(value.get("operation") or "")
+    if operation not in {"COUNT", "LIST", "DISTRIBUTION"}:
+        return None
+    try:
+        page_size = min(500, max(1, int(value.get("pageSize") or 50)))
+        next_offset = max(0, int(value.get("nextOffset") or 0))
+    except (TypeError, ValueError):
+        return None
+    group_by = str(value.get("groupBy") or "")[:40] or None
+    if group_by not in {None, "status", "issue_type", "priority"}:
+        return None
+    return {
+        "provider": "JIRA",
+        "resourceType": "ISSUE",
+        "filters": filters,
+        "operation": operation,
+        "groupBy": group_by,
+        "snapshotAt": str(value.get("snapshotAt") or "")[:100] or None,
+        "complete": bool(value.get("complete")),
+        "pageSize": page_size,
+        "nextOffset": next_offset,
+        "activeSubject": str(value.get("activeSubject") or "")[:500],
+    }
+
+
 class MongoConversationStore:
     """Store project-scoped conversations with MongoDB TTL retention."""
 
@@ -240,9 +292,7 @@ class MongoConversationStore:
             update=context_update,
         )
 
-    async def abandon_turn(
-        self, pending: PendingTurn, *, owner_id: str, project_id: str
-    ) -> None:
+    async def abandon_turn(self, pending: PendingTurn, *, owner_id: str, project_id: str) -> None:
         """Remove an unanswered pending turn so it cannot pollute later context."""
 
         await self._turns.delete_one(
@@ -304,13 +354,14 @@ class MongoConversationStore:
             "updated_at": now,
             "expires_at": now + self._retention,
             "context": {
-                "version": 2,
+                "version": 3,
                 "summary": "",
                 "active_subject": "",
                 "entities": [],
                 "last_intent": "",
                 "last_resolved_question": "",
                 "state_revision": 0,
+                "structured_scope": None,
             },
         }
 
@@ -345,14 +396,17 @@ class MongoConversationStore:
         )
         try:
             version = int(raw.get("version") or 1) if isinstance(raw, dict) else 1
-            revision = (
-                int(raw.get("state_revision") or 0) if isinstance(raw, dict) else 0
-            )
+            revision = int(raw.get("state_revision") or 0) if isinstance(raw, dict) else 0
         except (TypeError, ValueError):
             version, revision = 1, 0
         legacy = version < 2
+        structured_scope = (
+            _safe_structured_scope(raw.get("structured_scope"))
+            if isinstance(raw, dict) and version >= 3
+            else None
+        )
         return ConversationContextRecord(
-            version=2,
+            version=3,
             summary="" if legacy else str(raw.get("summary") or "")[:2000],
             active_subject="" if legacy else str(raw.get("active_subject") or "")[:500],
             entities=() if legacy else safe_entities,
@@ -361,6 +415,7 @@ class MongoConversationStore:
             if legacy
             else str(raw.get("last_resolved_question") or "")[:4000],
             state_revision=max(0, revision),
+            structured_scope=structured_scope,
         )
 
     async def _update_context(
@@ -386,18 +441,23 @@ class MongoConversationStore:
         if confidence_value < 0.6 or not standalone:
             return
         entities = update.get("entities", [])
-        safe_entities = [
-            {
-                "type": str(entity.get("type") or "subject")[:40],
-                "value": str(entity.get("value") or "")[:500],
-                "canonicalValue": str(
-                    entity.get("canonicalValue") or entity.get("value") or ""
-                )[:500],
-            }
-            for entity in entities[:12]
-            if isinstance(entity, dict) and str(entity.get("value") or "").strip()
-        ] if isinstance(entities, list) else []
+        safe_entities = (
+            [
+                {
+                    "type": str(entity.get("type") or "subject")[:40],
+                    "value": str(entity.get("value") or "")[:500],
+                    "canonicalValue": str(
+                        entity.get("canonicalValue") or entity.get("value") or ""
+                    )[:500],
+                }
+                for entity in entities[:12]
+                if isinstance(entity, dict) and str(entity.get("value") or "").strip()
+            ]
+            if isinstance(entities, list)
+            else []
+        )
         summary = f"Active subject: {subject}" if subject else ""
+        structured_scope = _safe_structured_scope(update.get("structuredScope"))
         revision_filter: dict[str, object] = {
             "context.state_revision": pending.context.state_revision
         }
@@ -417,12 +477,13 @@ class MongoConversationStore:
             },
             {
                 "$set": {
-                    "context.version": 2,
+                    "context.version": 3,
                     "context.summary": summary[:2000],
                     "context.active_subject": subject,
                     "context.entities": safe_entities,
                     "context.last_intent": intent,
                     "context.last_resolved_question": standalone,
+                    "context.structured_scope": structured_scope,
                 },
                 "$inc": {"context.state_revision": 1},
             },
