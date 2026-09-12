@@ -57,7 +57,7 @@ async def ingestion_projects(
     _authorize(request, authorization, settings)
     result = []
     for project in await projects.list_active():
-        if project.active and project.jira_projects:
+        if project.active and (project.jira_projects or project.confluence_spaces):
             result.append(
                 _project_response(project, await _atlassian_metadata(project, integrations))
             )

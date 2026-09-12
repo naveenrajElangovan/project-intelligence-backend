@@ -363,3 +363,15 @@ Exact job commands and verification are in the
 - Preserve Azure Table manifests and Chroma collections unless a documented data rollback requires
   switching namespaces.
 - Stop scheduled jobs before taking backend control-plane access offline.
+
+## Atlassian MCP and Forge events
+
+The development Compose stack includes the separate
+`project-intelligence-atlassian` service on `127.0.0.1:8005`. The backend remains
+authoritative for project mappings and encrypted OAuth records and registers
+ephemeral, project-qualified user sessions with that service. Jira and
+Confluence content is never returned through the backend's public API.
+
+The shared design, configuration, recovery behavior, read-only controls, and
+rollout checks are documented in the RAG repository at
+`docs/ATLASSIAN_MCP_AND_EVENTS.md`.

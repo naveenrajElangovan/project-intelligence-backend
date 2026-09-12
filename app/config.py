@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     rag_keepalive_expiry_seconds: float = 30.0
     telemetry_hmac_key: str = ""
     ingestion_internal_api_key: str = ""
+    atlassian_service_url: str = "http://atlassian:8000"
+    atlassian_service_internal_api_key: str = ""
     chat_mongodb_url: str = "mongodb://127.0.0.1:27018"
     chat_mongodb_database: str = "project_intelligence_chat"
     chat_retention_days: int = 30

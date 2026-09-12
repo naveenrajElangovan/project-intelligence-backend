@@ -234,6 +234,7 @@ async def project_chat(
                 else {}
             ),
             enabled_providers=enabled_providers,
+            **({"user_id": principal.object_id} if settings.atlassian_service_internal_api_key else {}),
         )
     except (httpx.HTTPError, ValueError, KeyError) as failure:
         chat_event(
@@ -346,6 +347,7 @@ async def project_chat_stream(
                     else {}
                 ),
                 enabled_providers=enabled_providers,
+                **({"user_id": principal.object_id} if settings.atlassian_service_internal_api_key else {}),
             ):
                 event_type = event.get("type")
                 if event_type == "complete" and isinstance(event.get("response"), dict):

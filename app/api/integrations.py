@@ -27,6 +27,7 @@ from app.authorization.graph import GraphProjectAccessReader
 from app.application.ports.secrets import SecretStore
 from app.config import Settings, get_settings
 from app.integrations.atlassian.client import AtlassianOAuthClient, AtlassianResource
+from app.integrations.atlassian.service import register_session_if_configured
 from app.integrations.dependencies import get_integration_store, get_secret_store
 from app.integrations.models import OAuthState, ProjectSource, ProviderConnection
 from app.integrations.store import IntegrationStore
@@ -416,6 +417,10 @@ async def atlassian_callback(
                 provider_display_name=identity.display_name,
                 provider_email=identity.email,
             )
+        )
+        await register_session_if_configured(
+            settings, user_id=oauth_state.user_id, project_id=oauth_state.project_id,
+            access_token=credentials.access_token, expires_at=credentials.expires_at,
         )
     except (httpx.HTTPError, ValueError):
         return _callback_page(
