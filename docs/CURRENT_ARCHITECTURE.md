@@ -1,6 +1,6 @@
 # Project Intelligence Backend — current architecture
 
-Last verified against the repository code and active local configuration: 2026-08-31.
+Last verified against the repository code and active local configuration: 2026-09-12.
 
 This is the single architecture reference for the backend project. It describes the implemented
 public trust boundary, authorization model, current local storage, production storage target,
@@ -35,7 +35,8 @@ flowchart LR
     B -->|"Projects, identities, memberships, integrations"| S["Control-plane SQL"]
     B -->|"Conversation metadata and turns"| M["MongoDB"]
     B -->|"Atlassian credential document"| K["Local encrypted store or Azure Key Vault"]
-    B -->|"Allowlisted Jira/Confluence calls"| A["Atlassian APIs"]
+    B -->|"session registration + project catalog"| AT["Atlassian integration service"]
+    AT -->|"Rovo MCP when authorized; controlled REST fallback now"| A["Atlassian APIs"]
     B -->|"Authorized private answer request"| R["RAG service"]
     I["Ingestion service"] -->|"Private control-plane and provider-gateway calls"| B
 
@@ -43,7 +44,7 @@ flowchart LR
     classDef private fill:#e8f1ff,stroke:#175cd3,color:#111;
     classDef data fill:#eaf7ea,stroke:#2e7d32,color:#111;
     class U,B public;
-    class E,G,A,R,I private;
+    class E,G,A,AT,R,I private;
     class S,M,K data;
 ```
 
@@ -259,7 +260,7 @@ The backend:
 RAG is not allowed to broaden the project or policy. A timeout, invalid RAG response, or private
 dependency error becomes a safe `503`; the backend never invents an answer.
 
-## 9. Ingestion control-plane flow
+## 9. Ingestion and Atlassian integration flow
 
 Ingestion has no SQL credential and does not read the SQL database directly.
 
@@ -269,23 +270,34 @@ sequenceDiagram
     participant B as Backend internal API
     participant S as SQL control plane
     participant K as Secret store
+    participant X as Atlassian service
     participant A as Atlassian
 
     I->>B: Authenticated request for project mapping
     B->>S: Load active project and provider scopes
     S-->>B: Non-secret mapping + integration metadata
     B-->>I: Validated ingestion mapping
-    I->>B: Allowlisted Jira/Confluence provider request
-    B->>K: Load/refresh encrypted credential document
-    B->>A: Provider request with temporary access token
-    A-->>B: Provider payload
-    B-->>I: Provider payload, never refresh token
+    I->>X: Read project content or run targeted refresh
+    X->>B: Resolve authorized cloud/project/space mapping
+    B->>K: Load/refresh encrypted credential document for fallback
+    B-->>X: Validated mapping and controlled REST gateway
+    alt Rovo service identity is configured
+        X->>A: Allowlisted read through Rovo MCP
+    else Current development fallback
+        X->>B: Allowlisted REST read
+        B->>A: Provider request with temporary access token
+        A-->>B: Provider payload
+        B-->>X: Provider payload, never refresh token
+    end
+    X-->>I: Normalized content or identifier-only event
 ```
 
-This keeps Azure SQL and Atlassian credentials inside one control-plane boundary. Production should
-replace the current development shared internal key with a workload identity and private ingress.
+This keeps Azure SQL and durable Atlassian credentials inside the backend boundary while the
+Atlassian service owns provider transport, sessions, event admission, catch-up, and freshness.
+Ingestion owns parsing and Chroma writes. Production should replace development shared internal
+keys with workload identities and private ingress.
 
-## 10. Atlassian OAuth and secret ownership
+## 10. Atlassian OAuth, sessions, and secret ownership
 
 The initial Jira/Confluence connection requires one interactive Atlassian consent. The backend:
 
@@ -298,6 +310,14 @@ The initial Jira/Confluence connection requires one interactive Atlassian consen
 
 Development uses an encrypted local file. Production uses Azure Key Vault. RAG and ingestion never
 receive Atlassian refresh tokens.
+
+After a valid connection is resolved, the backend may register a short-lived, project-qualified
+user session with `project-intelligence-atlassian`. The Atlassian service keeps that token only in
+memory and keys it by user plus application project. RAG supplies the authenticated user ID for a
+fresh live read; the service never substitutes the ingestion identity for that user.
+
+The initial Atlassian release is read-only. The backend does not expose a write activation route,
+and the Atlassian service rejects mutations independently with `ATLASSIAN_WRITE_DISABLED`.
 
 Atlassian refresh tokens rotate. The backend serializes refresh behavior, replaces the credential
 document atomically, and updates connection metadata only after a successful refresh.
@@ -353,6 +373,13 @@ All public project operations require an Entra principal and a fresh project aut
 - allowlisted Atlassian reads;
 - operational integration information that excludes credentials.
 
+### Internal Atlassian service APIs
+
+- project/cloud/space catalog resolution;
+- short-lived per-user MCP session registration and deletion;
+- controlled REST fallback using the backend-owned connection;
+- no mutation route while read-only mode is active.
+
 Internal credentials are separate from user tokens and backend-to-RAG credentials.
 
 ## 14. Data ownership summary
@@ -364,6 +391,7 @@ Internal credentials are separate from user tokens and backend-to-RAG credential
 | SQLite now / Azure SQL target | Backend | Control-plane rows and identity/access mirror | Passwords, token plaintext, documents, vectors |
 | Local encrypted store / Key Vault | Backend | Atlassian credential document | Source corpus |
 | MongoDB | Backend | Owner-scoped chat history and semantic context | Provider tokens, vectors |
+| Atlassian service memory | Atlassian service | Ephemeral user MCP sessions, event dedupe/debounce state, freshness | Durable OAuth refresh tokens, chunks, embeddings |
 | Azure Table | Ingestion | Manifests, cursors, leases, quarantine state | User authorization, bodies, embeddings |
 | Chroma | Ingestion writes; RAG reads | Chunk text, vectors, citations, security metadata | OAuth/API secrets |
 
@@ -377,10 +405,12 @@ flowchart TB
     AUTH --> SQLA["SQL identity/access adapter"]
     PORTS --> INFRA["app/infrastructure/*\nSQL, secrets, providers"]
     API --> CONV["app/conversations/*\nconversation domain and Mongo adapter"]
+    API --> ATS["app/integrations/atlassian/service.py\nephemeral session broker"]
     INFRA --> SQL["SQLite or Azure SQL"]
     INFRA --> KV["Encrypted file or Key Vault"]
     CONV --> MONGO["MongoDB"]
     APP --> RAG["Private RAG"]
+    ATS --> ATLSVC["Private Atlassian integration service"]
 ```
 
 Dependency direction is one way:
@@ -406,6 +436,7 @@ Important areas:
 - `app/application/rag_client.py`: private RAG transport and response validation.
 - `app/conversations/`: owner/project-scoped MongoDB chat persistence.
 - `app/integrations/` and provider infrastructure: OAuth and provider gateway behavior.
+- `app/integrations/atlassian/service.py`: internal Atlassian capability and user-session client.
 
 Architecture tests protect dependency direction and keep route modules from absorbing business and
 infrastructure logic.
@@ -418,10 +449,11 @@ flowchart TD
     T2["2. Ingestion → Backend\nlocal shared key; workload identity target"]
     T3["3. Backend → RAG\nprivate service credential; workload identity target"]
     T4["4. Backend → Azure SQL/Key Vault\nmanaged identity in production"]
-    T5["5. Backend → Atlassian\nrotating OAuth access token"]
-    T6["6. Backend → MongoDB\ndedicated app user"]
+    T5["5. Backend → Atlassian service\ninternal API key; ephemeral session registration"]
+    T6["6. Backend → Atlassian REST fallback\nrotating OAuth access token"]
+    T7["7. Backend → MongoDB\ndedicated app user"]
 
-    T1 --> T2 --> T3 --> T4 --> T5 --> T6
+    T1 --> T2 --> T3 --> T4 --> T5 --> T6 --> T7
 ```
 
 These are separate identities and credentials. A user token must never be reused as an ingestion,
@@ -461,11 +493,12 @@ would reveal credential locations.
 
 ### Current local development
 
-- backend runs natively on port `8001`;
+- backend is exposed on loopback port `8001`;
 - SQL control plane is the local SQLite file;
 - MongoDB provides local chat persistence;
 - provider credentials use the encrypted local store;
-- RAG and Chroma are private local dependencies;
+- RAG (`8003`), ingestion (`8002`), Atlassian (`8005`), Chroma (`8000`), and MongoDB
+  (`27018`) run in the development Docker topology;
 - the mobile client connects only to backend port `8001`.
 
 ### Production target

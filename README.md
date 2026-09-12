@@ -29,6 +29,8 @@ the development backend Compose configuration starts RAG because backend chat de
 - [Current backend architecture](docs/CURRENT_ARCHITECTURE.md)
 - [Current ingestion architecture](../project-intelligence-ingestion/docs/CURRENT_ARCHITECTURE.md)
 - [Current RAG architecture](../project-intelligence-rag/docs/CURRENT_ARCHITECTURE.md)
+- [Current Atlassian integration architecture](../project-intelligence-atlassian/docs/ARCHITECTURE.md)
+- [Current observability architecture](../project-intelligence-observability/docs/ARCHITECTURE.md)
 
 ## Configuration ownership
 
