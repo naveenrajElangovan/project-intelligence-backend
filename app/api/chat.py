@@ -33,6 +33,15 @@ from app.telemetry import chat_event, pseudonymous_user, request_id, started
 router = APIRouter(prefix="/v1/projects", tags=["chat"])
 
 
+def _search_failure_message(question: str) -> str:
+    """Keep infrastructure failures useful without another dependency call."""
+
+    subject = " ".join(question.split())[:160].strip()
+    if not subject:
+        return "I couldn't complete the project search right now. Please try again."
+    return f'I couldn\'t complete the project search for “{subject}” right now. Please try again.'
+
+
 def _enabled_providers(project, requested: list[str] | None) -> tuple[str, ...] | None:
     """Validate client source selection against server-owned project mappings."""
 
@@ -251,7 +260,7 @@ async def project_chat(
         )
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            "The project knowledge service is temporarily unavailable.",
+            _search_failure_message(body.question),
         ) from failure
 
     result = _chat_response(project_id, pending.conversation_id, response)
@@ -385,7 +394,7 @@ async def project_chat_stream(
                 json.dumps(
                     {
                         "type": "error",
-                        "message": "I couldn't complete that project search right now. Please try again.",
+                        "message": _search_failure_message(body.question),
                     },
                     separators=(",", ":"),
                 )
