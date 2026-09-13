@@ -73,6 +73,9 @@ class VectorStoreConfiguration(BaseModel):
     schema_version: str = Field(
         default="3", alias="schemaVersion", pattern=r"^[A-Za-z0-9_.-]{1,40}$"
     )
+    indexed_providers: list[Literal["JIRA", "GITHUB", "CONFLUENCE"]] = Field(
+        default_factory=list, alias="indexedProviders", max_length=3
+    )
 
 
 class IngestionScheduleConfiguration(BaseModel):
@@ -211,6 +214,7 @@ async def put_project_configuration(
             embedding_field=body.vector_store.embedding_field,
             embedding_model=body.vector_store.embedding_model,
             schema_version=body.vector_store.schema_version,
+            indexed_providers=tuple(body.vector_store.indexed_providers),
         ),
         ingestion_schedule=IngestionSchedule(
             github_merged_pr_enabled=body.ingestion_schedule.github_merged_pr_enabled,
@@ -373,6 +377,7 @@ def _response(project: ProjectDefinition) -> ProjectConfigurationResponse:
             embedding_field=project.vector_store.embedding_field,
             embedding_model=project.vector_store.embedding_model,
             schema_version=project.vector_store.schema_version,
+            indexed_providers=list(project.vector_store.indexed_providers),
         ),
         ingestion_schedule=IngestionScheduleConfiguration(
             github_merged_pr_enabled=project.ingestion_schedule.github_merged_pr_enabled,

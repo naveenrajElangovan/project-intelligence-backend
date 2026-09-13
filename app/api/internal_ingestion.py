@@ -374,6 +374,7 @@ def _project_response(
             "embeddingField": project.vector_store.embedding_field,
             "embeddingModel": project.vector_store.embedding_model,
             "schemaVersion": project.vector_store.schema_version,
+            "indexedProviders": list(project.vector_store.indexed_providers),
         },
         ingestionSchedule={
             "githubMergedPrEnabled": project.ingestion_schedule.github_merged_pr_enabled,

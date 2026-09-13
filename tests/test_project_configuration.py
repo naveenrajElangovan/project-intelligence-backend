@@ -68,6 +68,7 @@ def body():
         "vectorStore": {
             "collectionName": "project-intelligence",
             "textField": "chunk_text",
+            "indexedProviders": ["JIRA", "CONFLUENCE", "GITHUB"],
         },
         "ingestionSchedule": {
             "githubMergedPrEnabled": True,
@@ -100,6 +101,11 @@ def test_technical_lead_can_store_project_source_mappings() -> None:
     assert response.status_code == 200
     assert response.json()["githubRepositories"][0]["owner"] == "personal-owner"
     assert response.json()["vectorStore"]["collectionName"] == "project-intelligence"
+    assert response.json()["vectorStore"]["indexedProviders"] == [
+        "JIRA",
+        "CONFLUENCE",
+        "GITHUB",
+    ]
     assert response.json()["ingestionSchedule"]["dailyAt"] == "00:00"
     assert store.project.github_repositories[0].repository == "private-repo"
 

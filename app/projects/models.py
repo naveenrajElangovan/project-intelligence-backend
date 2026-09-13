@@ -35,6 +35,7 @@ class VectorStoreRoute:
     embedding_field: str = "embedding_text"
     embedding_model: str = "multilingual-e5-large"
     schema_version: str = "3"
+    indexed_providers: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

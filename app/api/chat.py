@@ -51,6 +51,11 @@ def _enabled_providers(project, requested: list[str] | None) -> tuple[str, ...] 
         *({"JIRA"} if project.jira_projects else set()),
         *({"CONFLUENCE"} if project.confluence_spaces else set()),
         *({"GITHUB"} if project.github_repositories else set()),
+        *{
+            value
+            for value in getattr(getattr(project, "vector_store", None), "indexed_providers", ())
+            if value in {"JIRA", "GITHUB", "CONFLUENCE"}
+        },
     }
     unavailable = sorted(set(requested).difference(available))
     if unavailable:

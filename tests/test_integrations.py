@@ -1,4 +1,5 @@
 import base64
+import asyncio
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 
@@ -144,6 +145,33 @@ def settings() -> Settings:
         atlassian_redirect_uri="http://localhost:8001/v1/integrations/atlassian/callback",
         provider_token_encryption_key=base64.b64encode(b"a" * 32).decode(),
     )
+
+
+def test_local_code_snapshot_exposes_code_provider_without_github_mapping() -> None:
+    project = ProjectDefinition(
+        project_id="AAOS",
+        display_name="AAOS",
+        active=True,
+        jira_projects=(),
+        confluence_spaces=(),
+        github_repositories=(),
+        vector_store=VectorStoreRoute(indexed_providers=("GITHUB",)),
+    )
+
+    statuses = asyncio.run(
+        integration_api._integration_statuses(
+            project,
+            FakeStore(),
+            FakeSecretStore(),
+            settings(),
+        )
+    )
+
+    github = next(item for item in statuses if item.provider == "GITHUB")
+    assert github.configured is True
+    assert github.available is True
+    assert github.connected is False
+    assert "Indexed local code" in github.message
 
 
 def configure(store: FakeStore, secret_store: FakeSecretStore | None = None) -> FakeSecretStore:

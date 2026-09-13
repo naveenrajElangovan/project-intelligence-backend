@@ -103,6 +103,7 @@ async def _integration_statuses(
     secrets_store: SecretStore,
     settings: Settings,
 ) -> list[IntegrationStatusResponse]:
+    indexed = set(project.vector_store.indexed_providers)
     atlassian = await store.get_connection(project.project_id, "ATLASSIAN")
     connected = atlassian is not None and (
         not atlassian.token_is_expired or await _has_refresh_token(atlassian, secrets_store)
@@ -117,7 +118,8 @@ async def _integration_statuses(
         else "Provider configuration is incomplete."
     )
     def atlassian_status(provider: str, source_configured: bool) -> IntegrationStatusResponse:
-        configured = settings.atlassian_oauth_configured and source_configured
+        indexed_snapshot = provider in indexed
+        configured = (settings.atlassian_oauth_configured and source_configured) or indexed_snapshot
         message = (
             f"No {provider.title()} source is mapped to this project."
             if not source_configured
@@ -126,8 +128,9 @@ async def _integration_statuses(
         return IntegrationStatusResponse(
             provider=provider,
             configured=configured,
-            connected=connected and configured,
-            available=connected and configured,
+            connected=connected and settings.atlassian_oauth_configured and source_configured,
+            available=(connected and settings.atlassian_oauth_configured and source_configured)
+            or indexed_snapshot,
             resource_name=atlassian.resource_name if atlassian else None,
             resource_url=atlassian.resource_url if atlassian else None,
             connected_at=atlassian.connected_at if atlassian else None,
@@ -140,12 +143,14 @@ async def _integration_statuses(
         atlassian_status("CONFLUENCE", bool(project.confluence_spaces)),
         IntegrationStatusResponse(
             provider="GITHUB",
-            configured=bool(project.github_repositories),
+            configured=bool(project.github_repositories) or "GITHUB" in indexed,
             connected=bool(project.github_repositories),
-            available=bool(project.github_repositories),
+            available=bool(project.github_repositories) or "GITHUB" in indexed,
             message=(
                 "Repository mapping is stored in Azure SQL; ingestion runs in the separate service."
                 if project.github_repositories
+                else "Indexed local code is available; no live GitHub repository is configured."
+                if "GITHUB" in indexed
                 else "No GitHub repository is mapped to this project."
             ),
         ),

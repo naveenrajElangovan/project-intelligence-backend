@@ -113,6 +113,7 @@ def _record_values(project: ProjectDefinition) -> dict[str, object]:
             "embeddingField": project.vector_store.embedding_field,
             "embeddingModel": project.vector_store.embedding_model,
             "schemaVersion": project.vector_store.schema_version,
+            "indexedProviders": list(project.vector_store.indexed_providers),
         },
         "ingestion_schedule": {
             "githubMergedPrEnabled": project.ingestion_schedule.github_merged_pr_enabled,
@@ -172,6 +173,11 @@ def _project(record: ProjectRecord) -> ProjectDefinition:
             embedding_field=str(vector_store.get("embeddingField") or "embedding_text"),
             embedding_model=str(vector_store.get("embeddingModel") or "multilingual-e5-large"),
             schema_version=str(vector_store.get("schemaVersion") or "3"),
+            indexed_providers=tuple(
+                str(value).upper()
+                for value in vector_store.get("indexedProviders", [])
+                if str(value).upper() in {"JIRA", "GITHUB", "CONFLUENCE"}
+            ),
         ),
         ingestion_schedule=IngestionSchedule(
             github_merged_pr_enabled=bool(schedule.get("githubMergedPrEnabled", True)),

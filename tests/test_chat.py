@@ -504,3 +504,14 @@ def test_unconfigured_provider_selection_is_rejected() -> None:
         assert getattr(error, "status_code", None) == 422
     else:
         raise AssertionError("unconfigured provider selection was accepted")
+
+
+def test_indexed_provider_is_available_without_live_connector_mapping() -> None:
+    project = SimpleNamespace(
+        jira_projects=(),
+        confluence_spaces=(),
+        github_repositories=(),
+        vector_store=VectorStoreRoute(indexed_providers=("GITHUB",)),
+    )
+
+    assert chat_api._enabled_providers(project, ["GITHUB"]) == ("GITHUB",)
