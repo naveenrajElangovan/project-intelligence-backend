@@ -23,19 +23,7 @@
       "projectKey": "T0"
     }
   ],
-  "githubRepositories": [
-    {
-      "owner": "naveenrajElangovan",
-      "repository": "aaos-compose-cluster",
-      "indexedBranches": ["main"],
-      "includePaths": [],
-      "excludePaths": ["**/*.docx", "**/project-documentation/**"]
-    },
-      {
-        "owner": "tiendas-3b",
-        "repository": "store-core-kotlin"
-      }
-  ],
+  "githubRepositories": [],
   "ingestionSchedule": {
     "githubMergedPrEnabled": true,
     "dailyEnabled": false,
