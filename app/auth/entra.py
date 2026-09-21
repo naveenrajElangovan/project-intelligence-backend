@@ -103,7 +103,14 @@ class EntraTokenValidator:
                     if isinstance(item, dict) and isinstance(item.get("kid"), str)
                 }
                 self._keys_expire_at = time.monotonic() + self._settings.entra_jwks_cache_seconds
-            except (httpx.HTTPError, jwt.PyJWTError, KeyError, RuntimeError, TypeError, ValueError) as error:
+            except (
+                httpx.HTTPError,
+                jwt.PyJWTError,
+                KeyError,
+                RuntimeError,
+                TypeError,
+                ValueError,
+            ) as error:
                 raise HTTPException(
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail="Identity provider signing keys are temporarily unavailable.",

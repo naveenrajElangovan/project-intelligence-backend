@@ -3,7 +3,7 @@
   "displayName": "Tiendas 3B Platform",
   "active": true,
   "vectorStore": {
-    "collectionName": "project-intelligence",
+    "collectionName": "jira-stage-20260911-jira-complete-v3",
     "textField": "chunk_text",
     "embeddingField": "embedding_text",
     "embeddingModel": "multilingual-e5-large",
@@ -24,7 +24,127 @@
       "projectKey": "T0"
     }
   ],
-  "githubRepositories": [],
+  "githubRepositories": [
+    {
+      "owner": "tiendas-3b",
+      "repository": "pos3b-app-kotlin",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "store-core-kotlin",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "bot3b-app-kotlin",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**", "migrations/env/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "auth-kotlin-lib",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "design-toolkit-kotlin-lib",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "kmp3b-lib-msg-bridge-kotlin",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "kmp3b-lib-webview",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "kotlin-lib-webview-kcef-engine",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**", "jcef/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "navigation-kotlin-lib",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "odm-kotlin-lib",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "store-lib-adb-transfer-kotlin",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "store-lib-payment-3b-voucher-kotlin",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "store-lib-payment-codi-kotlin",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "store-lib-payment-gateway-kotlin",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "store-lib-payment-santander-kotlin",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "store-lib-ticket-printer-kotlin",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    },
+    {
+      "owner": "tiendas-3b",
+      "repository": "ui-tools-kotlin-lib",
+      "indexedBranches": ["main"],
+      "includePaths": [],
+      "excludePaths": ["**/build/**", "**/.gradle/**", "**/generated/**"]
+    }
+  ],
   "ingestionSchedule": {
     "githubMergedPrEnabled": true,
     "dailyEnabled": false,

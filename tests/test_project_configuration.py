@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi.testclient import TestClient
 
 from app.auth.dependencies import get_current_principal
@@ -6,11 +8,12 @@ from app.authorization.dependencies import get_graph_project_access_reader
 from app.authorization.models import ProjectAccessContext
 from app.main import app
 from app.projects.dependencies import get_project_store
+from app.projects.models import ProjectDefinition
 
 
 class FakeStore:
     def __init__(self) -> None:
-        self.project = None
+        self.project: ProjectDefinition | None = None
 
     async def get(self, project_id: str):
         return self.project
@@ -26,7 +29,7 @@ class AccessReader:
     async def read(self, user_id: str):
         return ProjectAccessContext(
             projects=("POS_BOT",),
-            project_roles={"POS_BOT": self.role},
+            project_roles={"POS_BOT": (self.role,)},
         )
 
 
@@ -42,12 +45,10 @@ def principal():
     )
 
 
-def body():
+def body() -> dict[str, Any]:
     return {
         "displayName": "POS and BOT",
-        "jiraProjects": [
-            {"siteUrl": "https://example.atlassian.net", "projectKey": "POSBOT"}
-        ],
+        "jiraProjects": [{"siteUrl": "https://example.atlassian.net", "projectKey": "POSBOT"}],
         "confluenceSpaces": [
             {
                 "siteUrl": "https://example.atlassian.net",
@@ -107,6 +108,7 @@ def test_technical_lead_can_store_project_source_mappings() -> None:
         "GITHUB",
     ]
     assert response.json()["ingestionSchedule"]["dailyAt"] == "00:00"
+    assert store.project is not None
     assert store.project.github_repositories[0].repository == "private-repo"
 
 
@@ -145,6 +147,24 @@ def test_accepts_provider_neutral_collection_name() -> None:
     assert store.project.vector_store.collection_name == "future-provider-compatible"
 
 
+def test_rejects_a_vector_schema_other_than_the_suite_version() -> None:
+    store = FakeStore()
+    configure(store)
+    updated = body()
+    updated["vectorStore"]["schemaVersion"] = "4"
+    try:
+        response = TestClient(app).put(
+            "/v1/projects/POS_BOT/configuration",
+            json=updated,
+            headers={"Authorization": "Bearer test"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert store.project is None
+
+
 def test_source_access_and_retrieval_configuration_round_trip() -> None:
     store = FakeStore()
     configure(store)
@@ -175,9 +195,11 @@ def test_source_access_and_retrieval_configuration_round_trip() -> None:
     assert response.status_code == 200
     assert response.json()["sourceAccessRules"] == updated["sourceAccessRules"]
     assert response.json()["retrievalProfile"] == updated["retrievalProfile"]
+    assert store.project is not None
     assert store.project.source_access_rules[0].access_policy_id == (
         "department:POS_BOT:STORE_OPERATIONS"
     )
+    assert store.project.retrieval_profile is not None
     assert store.project.retrieval_profile.max_chunks_per_source == 12
     assert store.project.retrieval_profile.rerank_score_threshold == 0.0
 

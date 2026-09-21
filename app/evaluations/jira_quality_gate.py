@@ -1,13 +1,15 @@
 """Fail closed when Jira promotion evidence is incomplete or below its gates."""
 
 import math
+from typing import cast
 
 
-def promotion_failures(report: dict) -> list[str]:
-    failures = []
+def promotion_failures(report: dict[str, object]) -> list[str]:
+    failures: list[str] = []
 
-    def count_at_least(name, minimum):
-        return type(report.get(name)) is int and report[name] >= minimum
+    def count_at_least(name: str, minimum: int) -> bool:
+        value = report.get(name)
+        return type(value) is int and cast(int, value) >= minimum
 
     if report.get("full_ingestion_complete") is not True:
         failures.append("full_ingestion_incomplete")
@@ -36,19 +38,20 @@ def promotion_failures(report: dict) -> list[str]:
     }
     for name, minimum in thresholds.items():
         value = report.get(name)
-        if (
-            type(value) not in (float, int)
-            or not math.isfinite(value)
-            or not minimum <= value <= 1.0
-        ):
+        if type(value) not in (float, int):
+            failures.append(name + "_below_gate_or_unmeasured")
+            continue
+        numeric_value = float(cast("int | float", value))
+        if not math.isfinite(numeric_value) or not minimum <= numeric_value <= 1.0:
             failures.append(name + "_below_gate_or_unmeasured")
     regression = report.get("non_jira_regression_percentage_points")
+    valid_regression = type(regression) in (float, int)
+    regression_value = float(cast("int | float", regression)) if valid_regression else math.inf
     if (
         not count_at_least("non_jira_baseline_cases", 1)
         or report.get("non_jira_comparison_cases") != report.get("non_jira_baseline_cases")
-        or type(regression) not in (float, int)
-        or not math.isfinite(regression)
-        or regression > 5.0
+        or not math.isfinite(regression_value)
+        or regression_value > 5.0
     ):
         failures.append("non_jira_regression_unverified_or_above_gate")
     return failures

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.27,<2"]
+requires = ["hatchling==1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
@@ -9,31 +9,35 @@ description = "REST backend for Project Intelligence"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "aioodbc>=0.5,<1",
-  "aiosqlite>=0.21,<1",
-  "alembic>=1.16,<2",
-  "azure-identity>=1.24,<2",
-  "azure-servicebus>=7.14,<8",
-  "azure-keyvault-secrets>=4.10,<5",
-  "cryptography>=50,<51",
-  "fastapi>=0.116,<1",
-  "httpx>=0.28,<1",
-  "prometheus-client>=0.26,<1",
-  "pyjwt[crypto]>=2.10,<3",
-  "pydantic-settings>=2.10,<3",
-  "pymongo>=4.17,<5",
-  "sqlalchemy[asyncio]>=2.0.43,<3",
-  "uvicorn[standard]>=0.35,<1",
+  "aioodbc==0.5.0",
+  "aiosqlite==0.21.0",
+  "alembic==1.16.5",
+  "azure-identity==1.24.0",
+  "azure-servicebus==7.14.2",
+  "azure-keyvault-secrets==4.10.0",
+  "cryptography==50.0.0",
+  "fastapi==0.141.1",
+  "httpx==0.28.1",
+  "prometheus-client==0.26.0",
+  "pyjwt[crypto]==2.13.0",
+  "pydantic==2.13.4",
+  "pydantic-settings==2.15.0",
+  "pymongo==4.17.0",
+  "pyodbc==5.3.0",
+  "sqlalchemy[asyncio]==2.0.43",
+  "starlette==1.6.0",
+  "uvicorn[standard]==0.52.3",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "import-linter>=2.15,<3",
-  "mypy>=1.20,<2",
-  "pre-commit>=4.6,<5",
-  "pytest>=8.4,<9",
-  "pytest-cov>=6.2,<7",
-  "ruff>=0.16,<1",
+  "deptry==0.25.1",
+  "import-linter==2.15",
+  "mypy==1.20.2",
+  "pre-commit==4.6.2",
+  "pytest==8.4.2",
+  "pytest-cov==6.3.0",
+  "ruff==0.16.8",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -63,5 +67,20 @@ ignore = ["F811"]
 
 [tool.mypy]
 python_version = "3.12"
+plugins = ["pydantic.mypy"]
+explicit_package_bases = true
+incremental = false
 show_error_codes = true
 warn_unused_configs = true
+
+# azure-servicebus 7.14 does not publish a py.typed marker or stubs. Mypy 1.20.2
+# on Python 3.13 therefore cannot analyze these two imports.
+[[tool.mypy.overrides]]
+module = ["azure.servicebus", "azure.servicebus.aio"]
+ignore_missing_imports = true
+
+# pyodbc 5.3.0 is loaded by the SQL connectivity diagnostic but publishes no
+# py.typed marker or stub package.
+[[tool.mypy.overrides]]
+module = ["pyodbc"]
+ignore_missing_imports = true

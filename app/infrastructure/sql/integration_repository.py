@@ -88,9 +88,7 @@ class SqlIntegrationRepository:
                 for name, value in values.items():
                     setattr(record, name, value)
 
-    async def get_connection(
-        self, project_id: str, provider: str
-    ) -> ProviderConnection | None:
+    async def get_connection(self, project_id: str, provider: str) -> ProviderConnection | None:
         async with self._sessions() as session:
             record = await session.scalar(
                 select(IntegrationConnectionRecord).where(

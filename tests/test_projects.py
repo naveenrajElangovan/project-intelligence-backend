@@ -29,7 +29,7 @@ def _principal() -> EntraPrincipal:
 
 
 class _AccessReader:
-    def __init__(self, projects: tuple[str, ...], roles: dict[str, str]) -> None:
+    def __init__(self, projects: tuple[str, ...], roles: dict[str, tuple[str, ...]]) -> None:
         self._context = ProjectAccessContext(projects=projects, project_roles=roles)
 
     async def read(self, user_object_id: str) -> ProjectAccessContext:
@@ -65,7 +65,7 @@ def test_dashboard_returns_authorized_project_contract() -> None:
     app.dependency_overrides[get_current_principal] = _principal
     app.dependency_overrides[get_graph_project_access_reader] = lambda: _AccessReader(
         projects=("AAOS",),
-        roles={"AAOS": "TECHNICAL_LEAD"},
+        roles={"AAOS": ("TECHNICAL_LEAD",)},
     )
     app.dependency_overrides[get_settings] = _settings
     app.dependency_overrides[get_project_store] = _ProjectStore

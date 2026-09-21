@@ -3,6 +3,7 @@
 Revision ID: 20260823_0004
 Revises: 20260816_0003
 """
+
 import json
 
 from alembic import op
@@ -26,7 +27,9 @@ def upgrade() -> None:
         sa.column("vector_store", sa.JSON()),
     )
     if "pinecone" in columns:
-        for project_id, legacy in connection.execute(sa.select(projects.c.project_id, projects.c.pinecone)):
+        for project_id, legacy in connection.execute(
+            sa.select(projects.c.project_id, projects.c.pinecone)
+        ):
             if isinstance(legacy, str):
                 legacy = json.loads(legacy or "{}")
             legacy = legacy if isinstance(legacy, dict) else {}
@@ -38,7 +41,9 @@ def upgrade() -> None:
                 "schemaVersion": str(legacy.get("schemaVersion") or "3"),
             }
             connection.execute(
-                projects.update().where(projects.c.project_id == project_id).values(vector_store=route)
+                projects.update()
+                .where(projects.c.project_id == project_id)
+                .values(vector_store=route)
             )
     columns = {column["name"]: column for column in sa.inspect(connection).get_columns("projects")}
     with op.batch_alter_table("projects") as batch:
@@ -63,8 +68,15 @@ def upgrade() -> None:
         op.create_table(
             "project_memberships",
             sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-            sa.Column("user_id", sa.String(100), sa.ForeignKey("authenticated_users.object_id"), nullable=False),
-            sa.Column("project_id", sa.String(100), sa.ForeignKey("projects.project_id"), nullable=False),
+            sa.Column(
+                "user_id",
+                sa.String(100),
+                sa.ForeignKey("authenticated_users.object_id"),
+                nullable=False,
+            ),
+            sa.Column(
+                "project_id", sa.String(100), sa.ForeignKey("projects.project_id"), nullable=False
+            ),
             sa.Column("role", sa.String(100), nullable=False),
             sa.Column("access_policy_id", sa.String(220), nullable=False),
             sa.Column("authority", sa.String(50), nullable=False),
@@ -85,10 +97,14 @@ def downgrade() -> None:
         sa.column("pinecone", sa.JSON()),
         sa.column("vector_store", sa.JSON()),
     )
-    for project_id, route in connection.execute(sa.select(projects.c.project_id, projects.c.vector_store)):
+    for project_id, route in connection.execute(
+        sa.select(projects.c.project_id, projects.c.vector_store)
+    ):
         route = route if isinstance(route, dict) else json.loads(route or "{}")
         connection.execute(
-            projects.update().where(projects.c.project_id == project_id).values(
+            projects.update()
+            .where(projects.c.project_id == project_id)
+            .values(
                 pinecone={
                     "indexHost": "",
                     "namespace": "",

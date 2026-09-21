@@ -1,7 +1,7 @@
 """Public HTTP contracts and mapping for project chat endpoints."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -187,9 +187,11 @@ def chat_response(
         else [],
         evidence_status=str(response.get("evidenceStatus") or "UNKNOWN"),
         context_quality=str(response.get("contextQuality") or "UNKNOWN"),
-        context_relevance=float(response.get("contextRelevance") or 0.0),
-        context_completeness=float(response.get("contextCompleteness") or 0.0),
-        degradation=[str(value) for value in response.get("degradation", [])]
+        context_relevance=float(cast("str | int | float", response.get("contextRelevance") or 0.0)),
+        context_completeness=float(
+            cast("str | int | float", response.get("contextCompleteness") or 0.0)
+        ),
+        degradation=[str(value) for value in cast("list[object]", response.get("degradation", []))]
         if isinstance(response.get("degradation", []), list)
         else [],
         resultPage=result_page,

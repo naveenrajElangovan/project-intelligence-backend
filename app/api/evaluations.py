@@ -178,7 +178,7 @@ async def create_evaluation(
         )
     )
     if state == "READY":
-        return EvaluationAccepted(runId=run_id, status=state)
+        return EvaluationAccepted(run_id=run_id, status=state)
     try:
         await queue.send(payload)
     except Exception as failure:
@@ -186,7 +186,7 @@ async def create_evaluation(
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "Evaluation queue is unavailable."
         ) from failure
-    return EvaluationAccepted(runId=run_id, status="QUEUED")
+    return EvaluationAccepted(run_id=run_id, status="QUEUED")
 
 
 @router.post("/evaluations/{run_id}/cases/{case_id}")
@@ -226,11 +226,11 @@ async def evaluation_status(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Evaluation run was not found.")
     await _authorize(record.project_id, principal, reader)
     return EvaluationStatus(
-        runId=record.run_id,
+        run_id=record.run_id,
         status=record.status,
-        phoenixExperimentReference=record.phoenix_experiment_reference,
-        aggregateScores=record.aggregate_scores,
-        typedFailures=record.typed_failures,
+        phoenix_experiment_reference=record.phoenix_experiment_reference,
+        aggregate_scores=record.aggregate_scores,
+        typed_failures=record.typed_failures,
     )
 
 

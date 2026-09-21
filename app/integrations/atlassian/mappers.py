@@ -6,6 +6,10 @@ from typing import Any
 from app.integrations.models import ProjectSource
 
 
+def _mapping(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def required_string(payload: dict[str, object], key: str) -> str:
     value = payload.get(key)
     if not isinstance(value, str) or not value:
@@ -32,7 +36,7 @@ def authorization(access_token: str) -> dict[str, str]:
 
 def jira_source(issue: dict[str, Any], project_id: str, resource_url: str) -> ProjectSource:
     key = required_string(issue, "key")
-    fields = issue.get("fields") if isinstance(issue.get("fields"), dict) else {}
+    fields = _mapping(issue.get("fields"))
     summary = str(fields.get("summary") or key)
     return ProjectSource(
         project_id=project_id,
@@ -61,11 +65,11 @@ def confluence_page_source(
 ) -> ProjectSource:
     page_id = required_string(page, "id")
     title = str(page.get("title") or page_id)
-    body = page.get("body") if isinstance(page.get("body"), dict) else {}
-    storage = body.get("storage") if isinstance(body.get("storage"), dict) else {}
-    links = page.get("_links") if isinstance(page.get("_links"), dict) else {}
+    body = _mapping(page.get("body"))
+    storage = _mapping(body.get("storage"))
+    links = _mapping(page.get("_links"))
     web_ui = links.get("webui")
-    version = page.get("version") if isinstance(page.get("version"), dict) else {}
+    version = _mapping(page.get("version"))
     return ProjectSource(
         project_id=project_id,
         provider="CONFLUENCE",
@@ -89,10 +93,10 @@ def confluence_attachment_source(
 ) -> ProjectSource:
     attachment_id = required_string(attachment, "id")
     title = str(attachment.get("title") or attachment_id)
-    links = attachment.get("_links") if isinstance(attachment.get("_links"), dict) else {}
-    metadata = attachment.get("metadata") if isinstance(attachment.get("metadata"), dict) else {}
-    extensions = attachment.get("extensions") if isinstance(attachment.get("extensions"), dict) else {}
-    version = attachment.get("version") if isinstance(attachment.get("version"), dict) else {}
+    links = _mapping(attachment.get("_links"))
+    metadata = _mapping(attachment.get("metadata"))
+    extensions = _mapping(attachment.get("extensions"))
+    version = _mapping(attachment.get("version"))
     download = links.get("download")
     return ProjectSource(
         project_id=project_id,
@@ -123,7 +127,11 @@ def nested_name(value: object) -> str | None:
 
 
 def nested_display_name(value: object) -> str | None:
-    return str(value.get("displayName")) if isinstance(value, dict) and value.get("displayName") else None
+    return (
+        str(value.get("displayName"))
+        if isinstance(value, dict) and value.get("displayName")
+        else None
+    )
 
 
 def text_content(value: object) -> str:

@@ -187,3 +187,11 @@ async def test_sql_claim_survives_reopening_and_prevents_duplicate_execution(tmp
         assert cached.response == {"answer": "verified"}
     finally:
         await engine.dispose()
+
+
+def test_staging_manifest_rejects_any_other_vector_schema() -> None:
+    manifest = fixture()["store"].target.return_value.manifest
+    manifest["schema_version"] = "4"
+
+    with pytest.raises(ValueError):
+        StagingManifest.model_validate(manifest)

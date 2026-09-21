@@ -44,7 +44,7 @@ class RagServiceClient:
                 headers["Authorization"] = f"Bearer {self._settings.rag_internal_api_key}"
             if request_id:
                 headers["X-Request-ID"] = request_id
-            payload = {
+            payload: dict[str, object] = {
                 "projectId": project_id,
                 "collectionName": collection_name,
                 "textField": text_field,
@@ -130,7 +130,7 @@ class RagServiceClient:
             headers["Authorization"] = f"Bearer {self._settings.rag_internal_api_key}"
         if request_id:
             headers["X-Request-ID"] = request_id
-        payload = {
+        payload: dict[str, object] = {
             "projectId": project_id,
             "collectionName": collection_name,
             "textField": text_field,

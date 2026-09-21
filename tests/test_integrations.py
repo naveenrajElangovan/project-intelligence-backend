@@ -49,9 +49,7 @@ class FakeStore:
     async def upsert_connection(self, connection: ProviderConnection) -> None:
         self.connection = connection
 
-    async def get_connection(
-        self, project_id: str, provider: str
-    ) -> ProviderConnection | None:
+    async def get_connection(self, project_id: str, provider: str) -> ProviderConnection | None:
         return self.connection
 
     async def save_synchronized_sources(
@@ -74,7 +72,7 @@ class FakeStore:
 
 class AccessReader:
     async def read(self, user_object_id: str) -> ProjectAccessContext:
-        return ProjectAccessContext(projects=("AAOS",), project_roles={"AAOS": "TECHNICAL_LEAD"})
+        return ProjectAccessContext(projects=("AAOS",), project_roles={"AAOS": ("TECHNICAL_LEAD",)})
 
 
 class NoAccessReader:
@@ -84,7 +82,7 @@ class NoAccessReader:
 
 class StoreUserAccessReader:
     async def read(self, user_object_id: str) -> ProjectAccessContext:
-        return ProjectAccessContext(projects=("AAOS",), project_roles={"AAOS": "STORE_USER"})
+        return ProjectAccessContext(projects=("AAOS",), project_roles={"AAOS": ("STORE_USER",)})
 
 
 class FakeSecretStore:

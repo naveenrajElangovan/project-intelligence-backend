@@ -1,23 +1,26 @@
 PYTHON ?= .venv/bin/python
 LINT_IMPORTS ?= .venv/bin/lint-imports
 QUALITY_PATHS := app tests scripts migrations
-STRICT_MYPY_MODULES := app/application/chat_policy.py app/auth/models.py app/authorization/models.py app/telemetry.py
 export PI_DATABASE_URL ?= sqlite+aiosqlite:////tmp/project-intelligence-backend-quality.db
 
-.PHONY: check lint format-check type-check imports test
+.PHONY: check dependencies lint format format-check type-check imports test
 
-check: lint format-check type-check imports test
+check: lint format-check type-check dependencies imports test
 
 lint:
 	$(PYTHON) -m ruff check $(QUALITY_PATHS)
-	$(PYTHON) -m ruff check --select I scripts/check_mypy_ratchet.py scripts/check_ruff_format_ratchet.py
+
+format:
+	$(PYTHON) -m ruff format $(QUALITY_PATHS)
 
 format-check:
-	$(PYTHON) scripts/check_ruff_format_ratchet.py
+	$(PYTHON) -m ruff format --check $(QUALITY_PATHS)
 
 type-check:
-	$(PYTHON) -m mypy --strict $(STRICT_MYPY_MODULES)
-	$(PYTHON) scripts/check_mypy_ratchet.py
+	$(PYTHON) -m mypy app tests scripts migrations
+
+dependencies:
+	$(PYTHON) -m deptry . --exclude '.venv|\.git|\.local-sql' --optional-dependencies-dev-groups dev --known-first-party app,scripts --per-rule-ignores 'DEP002=aioodbc|aiosqlite|uvicorn|deptry|import-linter|mypy|pre-commit|pytest-cov|ruff,DEP004=pytest'
 
 imports:
 	$(LINT_IMPORTS) --no-cache

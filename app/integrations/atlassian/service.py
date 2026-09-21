@@ -51,7 +51,12 @@ class AtlassianServiceClient:
 
 
 async def register_session_if_configured(
-    settings: Settings, *, user_id: str, project_id: str, access_token: str, expires_at: datetime | None
+    settings: Settings,
+    *,
+    user_id: str,
+    project_id: str,
+    access_token: str,
+    expires_at: datetime | None,
 ) -> None:
     client = AtlassianServiceClient(settings)
     if not client.configured:

@@ -154,7 +154,7 @@ async def proxy_atlassian_read(
                 secret_store,
             )
         _validate_atlassian_target(target, connection.resource_id)
-        forwarded = [
+        forwarded: list[tuple[str, str | int | float | bool | None]] = [
             (key, value)
             for key, value in request.query_params.multi_items()
             if key not in {"target", "jira_issue_key"}
@@ -296,8 +296,8 @@ async def _atlassian_metadata(
         # backend-managed OAuth connection exists.
         return None
     return AtlassianGatewayResponse(
-        cloudId=connection.resource_id,
-        resourceUrl=connection.resource_url,
+        cloud_id=connection.resource_id,
+        resource_url=connection.resource_url,
     )
 
 
@@ -342,14 +342,14 @@ def _project_response(
     project: ProjectDefinition, atlassian: AtlassianGatewayResponse | None
 ) -> IngestionProjectResponse:
     return IngestionProjectResponse(
-        projectId=project.project_id,
-        displayName=project.display_name,
+        project_id=project.project_id,
+        display_name=project.display_name,
         active=project.active,
-        jiraProjects=[
+        jira_projects=[
             {"siteUrl": item.site_url, "projectKey": item.project_key}
             for item in project.jira_projects
         ],
-        confluenceSpaces=[
+        confluence_spaces=[
             {
                 "siteUrl": item.site_url,
                 "spaceKey": item.space_key,
@@ -358,7 +358,7 @@ def _project_response(
             }
             for item in project.confluence_spaces
         ],
-        githubRepositories=[
+        github_repositories=[
             {
                 "owner": item.owner,
                 "repository": item.repository,
@@ -368,7 +368,7 @@ def _project_response(
             }
             for item in project.github_repositories
         ],
-        vectorStore={
+        vector_store={
             "collectionName": project.vector_store.collection_name,
             "textField": project.vector_store.text_field,
             "embeddingField": project.vector_store.embedding_field,
@@ -376,14 +376,14 @@ def _project_response(
             "schemaVersion": project.vector_store.schema_version,
             "indexedProviders": list(project.vector_store.indexed_providers),
         },
-        ingestionSchedule={
+        ingestion_schedule={
             "githubMergedPrEnabled": project.ingestion_schedule.github_merged_pr_enabled,
             "dailyEnabled": project.ingestion_schedule.daily_enabled,
             "dailyAt": project.ingestion_schedule.daily_at,
             "timezone": project.ingestion_schedule.timezone,
             "manualEnabled": project.ingestion_schedule.manual_enabled,
         },
-        sourceAccessRules=[
+        source_access_rules=[
             {
                 "provider": rule.provider,
                 "matchField": rule.match_field,
@@ -392,8 +392,8 @@ def _project_response(
             }
             for rule in project.source_access_rules
         ],
-        retrievalProfile=(
-            project.retrieval_profile.as_payload()
+        retrieval_profile=(
+            dict(project.retrieval_profile.as_payload())
             if project.retrieval_profile is not None
             else None
         ),

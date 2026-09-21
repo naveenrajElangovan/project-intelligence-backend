@@ -3,6 +3,7 @@
 Revision ID: 20260815_0001
 Revises:
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -31,7 +32,9 @@ def upgrade() -> None:
         sa.Column("state_hash", sa.String(128), primary_key=True),
         sa.Column("user_id", sa.String(100), nullable=False),
         sa.Column("tenant_id", sa.String(100), nullable=False),
-        sa.Column("project_id", sa.String(100), sa.ForeignKey("projects.project_id"), nullable=False),
+        sa.Column(
+            "project_id", sa.String(100), sa.ForeignKey("projects.project_id"), nullable=False
+        ),
         sa.Column("provider", sa.String(30), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("user_email", sa.String(320)),
@@ -39,7 +42,9 @@ def upgrade() -> None:
     op.create_table(
         "integration_connections",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("project_id", sa.String(100), sa.ForeignKey("projects.project_id"), nullable=False),
+        sa.Column(
+            "project_id", sa.String(100), sa.ForeignKey("projects.project_id"), nullable=False
+        ),
         sa.Column("provider", sa.String(30), nullable=False),
         sa.Column("secret_reference", sa.String(500), nullable=False),
         sa.Column("tenant_id", sa.String(100), nullable=False),
@@ -60,7 +65,9 @@ def upgrade() -> None:
     op.create_table(
         "ingestion_jobs",
         sa.Column("job_id", sa.String(100), primary_key=True),
-        sa.Column("project_id", sa.String(100), sa.ForeignKey("projects.project_id"), nullable=False),
+        sa.Column(
+            "project_id", sa.String(100), sa.ForeignKey("projects.project_id"), nullable=False
+        ),
         sa.Column("trigger", sa.String(30), nullable=False),
         sa.Column("provider", sa.String(30), nullable=False),
         sa.Column("status", sa.String(30), nullable=False),

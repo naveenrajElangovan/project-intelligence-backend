@@ -1,6 +1,6 @@
 import json
-from collections.abc import AsyncIterator
-from typing import Annotated
+from collections.abc import AsyncIterator, Sequence
+from typing import Annotated, TypedDict, cast
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
@@ -27,6 +27,7 @@ from app.conversations.dependencies import get_conversation_store
 from app.conversations.models import ConversationNotFoundError, PendingTurn
 from app.conversations.store import MongoConversationStore
 from app.projects.dependencies import get_project_store
+from app.projects.models import RetrievalProfile
 from app.projects.store import ProjectStore
 from app.telemetry import chat_event, pseudonymous_user, request_id, started
 
@@ -39,10 +40,10 @@ def _search_failure_message(question: str) -> str:
     subject = " ".join(question.split())[:160].strip()
     if not subject:
         return "I couldn't complete the project search right now. Please try again."
-    return f'I couldn\'t complete the project search for “{subject}” right now. Please try again.'
+    return f"I couldn't complete the project search for “{subject}” right now. Please try again."
 
 
-def _enabled_providers(project, requested: list[str] | None) -> tuple[str, ...] | None:
+def _enabled_providers(project, requested: Sequence[str] | None) -> tuple[str, ...] | None:
     """Validate client source selection against server-owned project mappings."""
 
     if requested is None:
@@ -71,6 +72,23 @@ def _rag_service_client(request: Request, settings: Settings) -> RagServiceClien
 
     client = getattr(request.app.state, "rag_http_client", None)
     return RagServiceClient(settings, client=client)
+
+
+class _RagOptionalArguments(TypedDict, total=False):
+    retrieval_profile: dict[str, int | float]
+    user_id: str
+
+
+def _rag_optional_arguments(project: object, user_id: str | None) -> _RagOptionalArguments:
+    """Preserve compatibility with old project records and client test doubles."""
+
+    arguments: _RagOptionalArguments = {}
+    profile = getattr(project, "retrieval_profile", None)
+    if isinstance(profile, RetrievalProfile):
+        arguments["retrieval_profile"] = profile.as_payload()
+    if user_id is not None:
+        arguments["user_id"] = user_id
+    return arguments
 
 
 def _successful_context_update(response: dict[str, object]) -> dict[str, object] | None:
@@ -242,13 +260,11 @@ async def project_chat(
                 {"role": message.role, "content": message.content} for message in pending.history
             ),
             pending.context.as_payload(),
-            **(
-                {"retrieval_profile": project.retrieval_profile.as_payload()}
-                if getattr(project, "retrieval_profile", None) is not None
-                else {}
-            ),
             enabled_providers=enabled_providers,
-            **({"user_id": principal.object_id} if settings.atlassian_service_internal_api_key else {}),
+            **_rag_optional_arguments(
+                project,
+                principal.object_id if settings.atlassian_service_internal_api_key else None,
+            ),
         )
     except (httpx.HTTPError, ValueError, KeyError) as failure:
         chat_event(
@@ -355,17 +371,15 @@ async def project_chat_stream(
                     for message in pending.history
                 ),
                 pending.context.as_payload(),
-                **(
-                    {"retrieval_profile": project.retrieval_profile.as_payload()}
-                    if getattr(project, "retrieval_profile", None) is not None
-                    else {}
-                ),
                 enabled_providers=enabled_providers,
-                **({"user_id": principal.object_id} if settings.atlassian_service_internal_api_key else {}),
+                **_rag_optional_arguments(
+                    project,
+                    principal.object_id if settings.atlassian_service_internal_api_key else None,
+                ),
             ):
                 event_type = event.get("type")
                 if event_type == "complete" and isinstance(event.get("response"), dict):
-                    private_response = event["response"]
+                    private_response = cast("dict[str, object]", event["response"])
                     result = _chat_response(project_id, pending.conversation_id, private_response)
                     await conversation_store.complete_turn(
                         pending,

@@ -27,6 +27,7 @@ the development backend Compose configuration starts RAG because backend chat de
 
 - [Enterprise security, privacy, and AI data architecture](PROJECT_INTELLIGENCE_SECURITY_ARCHITECTURE.md)
 - [Current backend architecture](docs/CURRENT_ARCHITECTURE.md)
+- [Current backend quality status](docs/QUALITY_STATUS.md)
 - [Current ingestion architecture](../project-intelligence-ingestion/docs/CURRENT_ARCHITECTURE.md)
 - [Current RAG architecture](../project-intelligence-rag/docs/CURRENT_ARCHITECTURE.md)
 - [Current Atlassian integration architecture](../project-intelligence-atlassian/docs/ARCHITECTURE.md)
@@ -376,4 +377,4 @@ Confluence content is never returned through the backend's public API.
 
 The shared design, configuration, recovery behavior, read-only controls, and
 rollout checks are documented in the RAG repository at
-`docs/ATLASSIAN_MCP_AND_EVENTS.md`.
+`project-intelligence-rag/docs/CURRENT_ARCHITECTURE.md`.

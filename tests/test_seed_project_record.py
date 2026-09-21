@@ -4,7 +4,7 @@ from scripts.seed_project_record import _validated_retrieval_profile
 
 
 def test_retrieval_profile_partial_update_accepts_complete_bounded_values() -> None:
-    payload = {
+    payload: dict[str, object] = {
         "retrievalProfile": {
             "maxChunksPerSource": 6,
             "rerankTopN": 16,

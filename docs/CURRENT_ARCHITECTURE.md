@@ -1,6 +1,11 @@
 # Project Intelligence Backend — current architecture
 
-Last verified against the repository code and active local configuration: 2026-09-12.
+The application suite has one active vector-record schema: version `3`. The backend issues only
+that server-owned route version to ingestion and RAG; it does not negotiate or keep parallel
+runtime schema versions. Project configuration, persisted route construction, and evaluation
+staging manifests reject any other vector schema before it can be used.
+
+Last verified against the repository code and active local configuration: 2026-09-15.
 
 This is the single architecture reference for the backend project. It describes the implemented
 public trust boundary, authorization model, current local storage, production storage target,

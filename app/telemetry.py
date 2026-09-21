@@ -13,7 +13,11 @@ LOGGER = logging.getLogger("app.telemetry")
 
 def request_id(candidate: str | None) -> str:
     value = (candidate or "").strip()
-    if value and len(value) <= 128 and all(character.isalnum() or character in "-_." for character in value):
+    if (
+        value
+        and len(value) <= 128
+        and all(character.isalnum() or character in "-_." for character in value)
+    ):
         return value
     return str(uuid.uuid4())
 

@@ -70,9 +70,7 @@ class VectorStoreConfiguration(BaseModel):
         alias="embeddingModel",
         pattern=r"^[A-Za-z0-9_.-]{1,100}$",
     )
-    schema_version: str = Field(
-        default="3", alias="schemaVersion", pattern=r"^[A-Za-z0-9_.-]{1,40}$"
-    )
+    schema_version: Literal["3"] = Field(default="3", alias="schemaVersion")
     indexed_providers: list[Literal["JIRA", "GITHUB", "CONFLUENCE"]] = Field(
         default_factory=list, alias="indexedProviders", max_length=3
     )
@@ -94,9 +92,7 @@ class IngestionScheduleConfiguration(BaseModel):
 class SourceAccessRuleConfiguration(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     provider: Literal["CONFLUENCE", "JIRA", "GITHUB"]
-    match_field: Literal["TITLE", "SPACE_KEY", "LABEL", "PATH"] = Field(
-        alias="matchField"
-    )
+    match_field: Literal["TITLE", "SPACE_KEY", "LABEL", "PATH"] = Field(alias="matchField")
     prefix: str = Field(min_length=1, max_length=500)
     access_policy_id: str = Field(alias="accessPolicyId", min_length=1, max_length=220)
 
@@ -259,11 +255,11 @@ async def _require_project_role(
     return role[0]
 
 
-def _validate_project_sources(
-    project_id: str, body: ProjectConfigurationRequest
-) -> None:
-    for site in [*body.jira_projects, *body.confluence_spaces]:
-        parsed = urlsplit(site.site_url)
+def _validate_project_sources(project_id: str, body: ProjectConfigurationRequest) -> None:
+    site_urls = [site.site_url for site in body.jira_projects]
+    site_urls.extend(site.site_url for site in body.confluence_spaces)
+    for site_url in site_urls:
+        parsed = urlsplit(site_url)
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -274,18 +270,13 @@ def _validate_project_sources(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 "Atlassian site URLs cannot contain a query or fragment.",
             )
-    sites = {
-        item.site_url.rstrip("/").lower()
-        for item in [*body.jira_projects, *body.confluence_spaces]
-    }
+    sites = {site_url.rstrip("/").lower() for site_url in site_urls}
     if len(sites) > 1:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "The current Atlassian connector supports one site per project.",
         )
-    repositories = {
-        f"{item.owner}/{item.repository}".lower() for item in body.github_repositories
-    }
+    repositories = {f"{item.owner}/{item.repository}".lower() for item in body.github_repositories}
     if len(repositories) != len(body.github_repositories):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -299,7 +290,10 @@ def _validate_project_sources(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 "Every GitHub repository requires valid indexed branch names.",
             )
-        if any(not _valid_path_filter(path) for path in [*repository.include_paths, *repository.exclude_paths]):
+        if any(
+            not _valid_path_filter(path)
+            for path in [*repository.include_paths, *repository.exclude_paths]
+        ):
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT,
                 "GitHub path filters must be relative patterns without parent traversal.",
@@ -317,8 +311,7 @@ def _validate_project_sources(
         policy = rule.access_policy_id
         valid_department = (
             policy.startswith(department_prefix)
-            and re.fullmatch(r"[A-Z0-9_]{2,64}", policy.removeprefix(department_prefix))
-            is not None
+            and re.fullmatch(r"[A-Z0-9_]{2,64}", policy.removeprefix(department_prefix)) is not None
         )
         if policy != shared_policy and not valid_department:
             raise HTTPException(
@@ -340,7 +333,9 @@ def _valid_git_reference(value: str) -> bool:
 
 
 def _valid_path_filter(value: str) -> bool:
-    return bool(value and len(value) <= 500 and not value.startswith("/") and ".." not in value.split("/"))
+    return bool(
+        value and len(value) <= 500 and not value.startswith("/") and ".." not in value.split("/")
+    )
 
 
 def _response(project: ProjectDefinition) -> ProjectConfigurationResponse:

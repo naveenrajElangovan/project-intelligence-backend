@@ -26,8 +26,13 @@ class EvaluationRunStore:
                 record.updated_at = datetime.now(UTC)
 
     async def complete(
-        self, run_id: str, *, status: str, phoenix_reference: str | None,
-        aggregate_scores: dict[str, object], typed_failures: list[dict[str, object]],
+        self,
+        run_id: str,
+        *,
+        status: str,
+        phoenix_reference: str | None,
+        aggregate_scores: dict[str, object],
+        typed_failures: list[dict[str, object]],
     ) -> EvaluationRunRecord | None:
         async with self._sessions() as session, session.begin():
             record = await session.get(EvaluationRunRecord, run_id)

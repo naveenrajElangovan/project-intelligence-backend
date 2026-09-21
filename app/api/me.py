@@ -56,10 +56,8 @@ async def me(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Project configuration is temporarily unavailable.",
         ) from error
-    graph_order = {
-        project_id: index for index, project_id in enumerate(access_context.projects)
-    }
-    configured_projects = sorted(
+    graph_order = {project_id: index for index, project_id in enumerate(access_context.projects)}
+    ordered_projects = sorted(
         configured_projects,
         key=lambda project: (
             graph_order.get(project.project_id, len(graph_order)),
@@ -72,11 +70,11 @@ async def me(
             display_name=project.display_name,
             role=access_context.project_roles[project.project_id][0],
         )
-        for project in configured_projects
+        for project in ordered_projects
         if project.project_id in access_context.project_roles
     ]
     if settings.log_authorization_details:
-        configured_project_ids = {project.project_id for project in configured_projects}
+        configured_project_ids = {project.project_id for project in ordered_projects}
         assigned_project_ids = {assignment.project_id for assignment in assignments}
         logger.info(
             "project_access_diagnostics user_id=%s graph_projects=%s graph_roles=%s "
@@ -95,7 +93,7 @@ async def me(
                     "githubSources": len(project.github_repositories),
                     "vectorStoreConfigured": bool(project.vector_store.collection_name),
                 }
-                for project in configured_projects
+                for project in ordered_projects
             ],
             sorted(assigned_project_ids),
             sorted(

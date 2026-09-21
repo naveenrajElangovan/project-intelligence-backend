@@ -8,7 +8,9 @@ from app.config import Settings
 
 
 def test_comma_separated_cors_origins() -> None:
-    settings = Settings(_env_file=None, cors_origins="https://mobile.example, https://admin.example")
+    settings = Settings(
+        _env_file=None, cors_origins="https://mobile.example, https://admin.example"
+    )
 
     assert settings.cors_origin_list == ["https://mobile.example", "https://admin.example"]
 

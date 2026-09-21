@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 from uuid import uuid4
 
 from pymongo import ASCENDING, DESCENDING, AsyncMongoClient
@@ -105,7 +106,7 @@ class MongoConversationStore:
         retention_days: int,
         history_turns: int,
     ) -> None:
-        self._client = AsyncMongoClient(
+        self._client: AsyncMongoClient[dict[str, Any]] = AsyncMongoClient(
             mongodb_url,
             serverSelectionTimeoutMS=3000,
             connectTimeoutMS=3000,
@@ -446,7 +447,7 @@ class MongoConversationStore:
         intent = str(update.get("intent") or "").strip()[:80]
         confidence = update.get("resolutionConfidence", 0.0)
         try:
-            confidence_value = float(confidence)
+            confidence_value = float(cast(Any, confidence))
         except (TypeError, ValueError):
             confidence_value = 0.0
         if confidence_value < 0.6 or not standalone:

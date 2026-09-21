@@ -30,7 +30,7 @@ class AccessReader:
     async def read(self, _: str) -> ProjectAccessContext:
         return ProjectAccessContext(
             projects=self.projects,
-            project_roles={project: "DEVELOPER" for project in self.projects},
+            project_roles={project: ("DEVELOPER",) for project in self.projects},
         )
 
 

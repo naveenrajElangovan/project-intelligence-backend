@@ -50,10 +50,7 @@ def test_dependency_failure_is_recorded_per_dependency() -> None:
     # A failing SQL check must not implicate RAG, which is what the blackbox
     # probe of /ready could not distinguish.
     assert _sample(body, 'pi_backend_dependency_ready{dependency="rag"}') == 1.0
-    assert (
-        _sample(body, 'pi_backend_dependency_check_failures_total{dependency="database"}')
-        == 1.0
-    )
+    assert _sample(body, 'pi_backend_dependency_check_failures_total{dependency="database"}') == 1.0
 
     metrics.record_dependency_ready("database")
 
@@ -65,8 +62,10 @@ def test_token_outcomes_are_counted_separately() -> None:
     metrics.record_token_failure()
     body = client.get("/metrics").text
 
-    assert _sample(body, 'pi_backend_sql_access_token_total{outcome="acquired"}') >= 1.0
-    assert _sample(body, 'pi_backend_sql_access_token_total{outcome="failed"}') >= 1.0
+    acquired = _sample(body, 'pi_backend_sql_access_token_total{outcome="acquired"}')
+    failed = _sample(body, 'pi_backend_sql_access_token_total{outcome="failed"}')
+    assert acquired is not None and acquired >= 1.0
+    assert failed is not None and failed >= 1.0
 
 
 def test_exposition_carries_no_identifiers() -> None:

@@ -6,19 +6,24 @@ repos:
         entry: make lint
         language: system
         pass_filenames: false
-      - id: ruff-format-ratchet
-        name: Ruff format ratchet
+      - id: ruff-format
+        name: Ruff format check
         entry: make format-check
         language: system
         pass_filenames: false
-      - id: mypy-ratchet
-        name: mypy strict modules and repository ratchet
+      - id: mypy
+        name: repository mypy
         entry: make type-check
         language: system
         pass_filenames: false
       - id: import-boundaries
         name: Import architecture contracts
         entry: make imports
+        language: system
+        pass_filenames: false
+      - id: dependency-usage
+        name: Python dependency usage
+        entry: make dependencies
         language: system
         pass_filenames: false
       - id: tests-and-coverage

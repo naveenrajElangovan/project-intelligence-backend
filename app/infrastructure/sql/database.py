@@ -177,9 +177,7 @@ def get_engine() -> AsyncEngine:
         del dialect, conn_rec
         _strip_trusted_connection(cargs, cparams)
         attrs_before = cparams.setdefault("attrs_before", {})
-        attrs_before[SQL_COPT_SS_ACCESS_TOKEN] = _encode_access_token(
-            token_provider.token()
-        )
+        attrs_before[SQL_COPT_SS_ACCESS_TOKEN] = _encode_access_token(token_provider.token())
 
     @event.listens_for(engine.sync_engine, "handle_error")
     def explain_connection_refusal(context) -> None:
