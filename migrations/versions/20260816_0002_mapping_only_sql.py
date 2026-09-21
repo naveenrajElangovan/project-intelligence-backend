@@ -6,6 +6,7 @@ Revises: 20260815_0001
 The rename is deliberately recoverable. After backup/retention approval, an
 administrator may separately delete the archived tables.
 """
+
 from alembic import op
 
 revision = "20260816_0002"

@@ -101,15 +101,11 @@ async def _run() -> None:
     async with factory() as session:
         existing = (
             await session.execute(
-                select(ProjectRecord).where(
-                    ProjectRecord.project_id == str(payload["projectId"])
-                )
+                select(ProjectRecord).where(ProjectRecord.project_id == str(payload["projectId"]))
             )
         ).scalar_one_or_none()
         if arguments.only and existing is None:
-            raise SystemExit(
-                f"Cannot partially update missing project {payload['projectId']!r}."
-            )
+            raise SystemExit(f"Cannot partially update missing project {payload['projectId']!r}.")
         if arguments.only == "retrieval-profile":
             previous_rules = list(existing.source_access_rules or [])
             existing.retrieval_profile = _validated_retrieval_profile(payload)
@@ -130,9 +126,7 @@ async def _run() -> None:
                 )
             )
             return
-        record = existing or ProjectRecord(
-            project_id=str(payload["projectId"]), created_at=now
-        )
+        record = existing or ProjectRecord(project_id=str(payload["projectId"]), created_at=now)
         record.display_name = str(payload["displayName"])
         record.active = bool(payload.get("active", True))
         record.jira_projects = payload.get("jiraProjects") or []

@@ -144,7 +144,9 @@ class AtlassianOAuthClient:
             }
             sources: list[ProjectSource] = []
             while True:
-                response = await client.get(url, headers=_authorization(access_token), params=params)
+                response = await client.get(
+                    url, headers=_authorization(access_token), params=params
+                )
                 response.raise_for_status()
                 payload = response.json()
                 issues = payload.get("issues", [])
@@ -196,11 +198,7 @@ class AtlassianOAuthClient:
                 for page in results:
                     if not isinstance(page, dict):
                         continue
-                    sources.append(
-                        _confluence_page_source(
-                            page, project_id, resource_url
-                        )
-                    )
+                    sources.append(_confluence_page_source(page, project_id, resource_url))
                     page_id = _required_string(page, "id")
                     sources.extend(
                         await self._attachment_sources(
@@ -212,7 +210,11 @@ class AtlassianOAuthClient:
                             resource_url,
                         )
                     )
-                next_link = payload.get("_links", {}).get("next") if isinstance(payload.get("_links"), dict) else None
+                next_link = (
+                    payload.get("_links", {}).get("next")
+                    if isinstance(payload.get("_links"), dict)
+                    else None
+                )
                 if isinstance(next_link, str) and next_link:
                     url = next_link if next_link.startswith("http") else f"{origin}{next_link}"
                 else:
@@ -247,12 +249,3 @@ class AtlassianOAuthClient:
             for item in results
             if isinstance(item, dict)
         )
-
-
-def _required_string(payload: dict[str, object], key: str) -> str:
-    value = payload.get(key)
-    if not isinstance(value, str) or not value:
-        raise ValueError(f"Atlassian response is missing {key}.")
-    return value
-
-

@@ -31,9 +31,7 @@ async def require_technical_lead_project(
     context = await access_reader.read(principal.object_id)
     role = context.project_roles.get(project_id)
     if project_id not in context.projects or role is None:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "You do not have access to this project."
-        )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You do not have access to this project.")
     project = await project_store.get(project_id)
     if project is None:
         raise HTTPException(

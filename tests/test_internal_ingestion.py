@@ -21,9 +21,7 @@ PROJECT = ProjectDefinition(
     active=True,
     jira_projects=(),
     confluence_spaces=(),
-    github_repositories=(
-        GitHubRepositorySource("personal-owner", "private-repo", ("main",)),
-    ),
+    github_repositories=(GitHubRepositorySource("personal-owner", "private-repo", ("main",)),),
     vector_store=VectorStoreRoute("project-intelligence", "chunk_text"),
     ingestion_schedule=IngestionSchedule(),
 )

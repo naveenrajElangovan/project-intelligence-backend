@@ -89,4 +89,6 @@ def create_app() -> FastAPI:
     application.include_router(chat_router)
     application.include_router(evaluations_router)
     return application
+
+
 app = create_app()

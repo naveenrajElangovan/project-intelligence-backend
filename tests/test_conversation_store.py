@@ -1,5 +1,6 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
 from app.conversations.store import (
     ConversationContextRecord,
@@ -97,7 +98,7 @@ class HistoryCollection:
 def test_semantic_context_update_is_bounded_and_revision_guarded() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
     conversations = UpdatingConversationsCollection()
-    store._conversations = conversations
+    store._conversations = cast(Any, conversations)
     pending = PendingTurn(
         "conversation-1",
         "turn-1",
@@ -143,7 +144,7 @@ def test_semantic_context_update_is_bounded_and_revision_guarded() -> None:
 def test_low_confidence_context_update_is_not_persisted() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
     conversations = UpdatingConversationsCollection()
-    store._conversations = conversations
+    store._conversations = cast(Any, conversations)
     pending = PendingTurn("conversation-1", "turn-1", ())
 
     asyncio.run(
@@ -164,14 +165,17 @@ def test_low_confidence_context_update_is_not_persisted() -> None:
 
 def test_version_one_context_is_read_as_empty_without_losing_revision() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
-    store._conversations = ContextCollection(
-        {
-            "version": 1,
-            "active_subject": "poisoned refusal subject",
-            "last_intent": "DELIVERY",
-            "last_resolved_question": "failed question",
-            "state_revision": 16,
-        }
+    store._conversations = cast(
+        Any,
+        ContextCollection(
+            {
+                "version": 1,
+                "active_subject": "poisoned refusal subject",
+                "last_intent": "DELIVERY",
+                "last_resolved_question": "failed question",
+                "state_revision": 16,
+            }
+        ),
     )
 
     context = asyncio.run(store._load_context("owner", "DEMO", "conversation"))
@@ -187,7 +191,7 @@ def test_version_one_context_is_read_as_empty_without_losing_revision() -> None:
 def test_rag_history_excludes_confidence_none_turns() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
     turns = HistoryCollection()
-    store._turns = turns
+    store._turns = cast(Any, turns)
     store._history_turns = 6
 
     assert asyncio.run(store._load_history("owner", "DEMO", "conversation")) == ()
@@ -198,7 +202,7 @@ def test_rag_history_excludes_confidence_none_turns() -> None:
 def test_missing_conversation_id_creates_a_distinct_new_chat() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
     conversations = ConversationsCollection()
-    store._conversations = conversations
+    store._conversations = cast(Any, conversations)
     now = datetime(2026, 8, 19, 12, 0, tzinfo=UTC)
     store._retention = timedelta(days=30)
 
@@ -238,7 +242,7 @@ def test_missing_conversation_id_creates_a_distinct_new_chat() -> None:
 def test_structured_jira_scope_is_bounded_and_persisted() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
     conversations = UpdatingConversationsCollection()
-    store._conversations = conversations
+    store._conversations = cast(Any, conversations)
     pending = PendingTurn(
         "conversation-1", "turn-1", (), ConversationContextRecord(state_revision=7)
     )
@@ -270,29 +274,33 @@ def test_structured_jira_scope_is_bounded_and_persisted() -> None:
         )
     )
 
+    assert conversations.update is not None
     assert conversations.update["$set"]["context.structured_scope"] == scope
     assert conversations.update["$set"]["context.version"] == 3
 
 
 def test_version_three_structured_scope_round_trips_to_rag_payload() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
-    store._conversations = ContextCollection(
-        {
-            "version": 3,
-            "active_subject": "Jira tickets matching POS",
-            "last_intent": "JIRA_LIST",
-            "last_resolved_question": "what are all fixed?",
-            "state_revision": 8,
-            "structured_scope": {
-                "provider": "JIRA",
-                "resourceType": "ISSUE",
-                "filters": {"labels": ["POS"], "fixed": ["AUTO"]},
-                "operation": "LIST",
-                "pageSize": 50,
-                "nextOffset": 50,
-                "complete": True,
-            },
-        }
+    store._conversations = cast(
+        Any,
+        ContextCollection(
+            {
+                "version": 3,
+                "active_subject": "Jira tickets matching POS",
+                "last_intent": "JIRA_LIST",
+                "last_resolved_question": "what are all fixed?",
+                "state_revision": 8,
+                "structured_scope": {
+                    "provider": "JIRA",
+                    "resourceType": "ISSUE",
+                    "filters": {"labels": ["POS"], "fixed": ["AUTO"]},
+                    "operation": "LIST",
+                    "pageSize": 50,
+                    "nextOffset": 50,
+                    "complete": True,
+                },
+            }
+        ),
     )
 
     context = asyncio.run(store._load_context("owner", "DEMO", "conversation"))
@@ -322,7 +330,9 @@ def test_jira_section_scope_is_validated_for_follow_up_paging() -> None:
 
     assert scope is not None
     assert scope["operation"] == "SECTION"
-    assert scope["filters"]["issue_key"] == ["T0-13"]
+    filters = scope["filters"]
+    assert isinstance(filters, dict)
+    assert filters["issue_key"] == ["T0-13"]
 
 
 def test_jira_overview_scope_is_preserved() -> None:
@@ -346,7 +356,7 @@ def test_jira_overview_scope_is_preserved() -> None:
 def test_conversation_listing_applies_requested_page_offset_and_limit() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
     conversations = PagedConversationsCollection()
-    store._conversations = conversations
+    store._conversations = cast(Any, conversations)
 
     result = asyncio.run(
         store.list_conversations(
@@ -365,7 +375,7 @@ def test_conversation_listing_applies_requested_page_offset_and_limit() -> None:
 def test_explicit_new_chats_receive_distinct_server_conversation_ids() -> None:
     store = MongoConversationStore.__new__(MongoConversationStore)
     conversations = ConversationsCollection()
-    store._conversations = conversations
+    store._conversations = cast(Any, conversations)
     store._retention = timedelta(days=30)
 
     first = asyncio.run(

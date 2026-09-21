@@ -9,7 +9,9 @@ from app.api.integrations import _can_ask_questions
 from app.projects.models import ProjectDefinition, VectorStoreRoute
 
 
-def _project(*, active: bool = True, collection_name: str = "project-intelligence") -> ProjectDefinition:
+def _project(
+    *, active: bool = True, collection_name: str = "project-intelligence"
+) -> ProjectDefinition:
     return ProjectDefinition(
         project_id="DEMO",
         display_name="Example Retail Platform",

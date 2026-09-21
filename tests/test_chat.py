@@ -30,7 +30,7 @@ class AccessReader:
     async def read(self, _: str) -> ProjectAccessContext:
         return ProjectAccessContext(
             projects=self.projects,
-            project_roles={project: "DEVELOPER" for project in self.projects},
+            project_roles={project: ("DEVELOPER",) for project in self.projects},
         )
 
 
@@ -56,6 +56,13 @@ def test_jira_result_page_is_preserved_for_public_clients() -> None:
     assert response.result_page is not None
     assert response.result_page.total == 60
     assert response.result_page.has_more is True
+
+
+def test_search_failure_message_preserves_the_bounded_user_subject() -> None:
+    message = chat_api._search_failure_message("  what   is memoy here  ")
+
+    assert "what is memoy here" in message
+    assert len(chat_api._search_failure_message("x" * 500)) < 260
 
 
 class ProjectStore:
@@ -497,3 +504,14 @@ def test_unconfigured_provider_selection_is_rejected() -> None:
         assert getattr(error, "status_code", None) == 422
     else:
         raise AssertionError("unconfigured provider selection was accepted")
+
+
+def test_indexed_provider_is_available_without_live_connector_mapping() -> None:
+    project = SimpleNamespace(
+        jira_projects=(),
+        confluence_spaces=(),
+        github_repositories=(),
+        vector_store=VectorStoreRoute(indexed_providers=("GITHUB",)),
+    )
+
+    assert chat_api._enabled_providers(project, ["GITHUB"]) == ("GITHUB",)

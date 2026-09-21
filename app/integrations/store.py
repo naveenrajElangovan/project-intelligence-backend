@@ -11,9 +11,7 @@ class IntegrationStore(Protocol):
 
     async def upsert_connection(self, connection: ProviderConnection) -> None: ...
 
-    async def get_connection(
-        self, project_id: str, provider: str
-    ) -> ProviderConnection | None: ...
+    async def get_connection(self, project_id: str, provider: str) -> ProviderConnection | None: ...
 
     async def save_synchronized_sources(
         self,

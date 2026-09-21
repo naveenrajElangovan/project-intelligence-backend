@@ -19,7 +19,9 @@ class AccessReader:
 
     async def read(self, user_object_id):
         assert user_object_id == "user-1"
-        return ProjectAccessContext(self.projects, {project: ("DEVELOPER",) for project in self.projects})
+        return ProjectAccessContext(
+            self.projects, {project: ("DEVELOPER",) for project in self.projects}
+        )
 
 
 class Store:
@@ -74,9 +76,12 @@ def test_evaluation_submission_is_project_authorized_and_queued() -> None:
                 "datasetReference": "rag-gold-project-T2.0-v1",
                 "evaluatorSuiteVersion": "2026-09-10.1",
                 "candidateConfiguration": {
-                    "promptVersion": "abc", "modelVersion": "qwen3.5",
-                    "modelProfile": "standard", "retrievalTopK": 25,
-                    "rerankTopN": 8, "retrievalScoreThreshold": 0.0,
+                    "promptVersion": "abc",
+                    "modelVersion": "qwen3.5",
+                    "modelProfile": "standard",
+                    "retrievalTopK": 25,
+                    "rerankTopN": 8,
+                    "retrievalScoreThreshold": 0.0,
                 },
             },
         )
@@ -99,9 +104,12 @@ def test_evaluation_submission_rejects_another_project() -> None:
                 "datasetReference": "dataset-1",
                 "evaluatorSuiteVersion": "2026-09-10.1",
                 "candidateConfiguration": {
-                    "promptVersion": "abc", "modelVersion": "qwen3.5",
-                    "modelProfile": "standard", "retrievalTopK": 25,
-                    "rerankTopN": 8, "retrievalScoreThreshold": 0.0,
+                    "promptVersion": "abc",
+                    "modelVersion": "qwen3.5",
+                    "modelProfile": "standard",
+                    "retrievalTopK": 25,
+                    "rerankTopN": 8,
+                    "retrievalScoreThreshold": 0.0,
                 },
             },
         )
@@ -120,9 +128,12 @@ def test_evaluation_requires_exactly_one_bounded_input() -> None:
                 "projectId": "T2.0",
                 "evaluatorSuiteVersion": "2026-09-10.1",
                 "candidateConfiguration": {
-                    "promptVersion": "abc", "modelVersion": "qwen3.5",
-                    "modelProfile": "standard", "retrievalTopK": 25,
-                    "rerankTopN": 8, "retrievalScoreThreshold": 0.0,
+                    "promptVersion": "abc",
+                    "modelVersion": "qwen3.5",
+                    "modelProfile": "standard",
+                    "retrievalTopK": 25,
+                    "rerankTopN": 8,
+                    "retrievalScoreThreshold": 0.0,
                 },
             },
         )
@@ -151,23 +162,30 @@ def test_worker_callback_requires_service_credential_and_updates_run() -> None:
     )
     from app.infrastructure.sql.models import EvaluationRunRecord
     from datetime import UTC, datetime
+
     record = EvaluationRunRecord(
-        run_id="run-1", project_id="T2.0", requested_by="user-1", status="QUEUED",
-        evaluator_suite_version="2026-09-10.1", request_payload={},
-        aggregate_scores={}, typed_failures=[], created_at=datetime.now(UTC),
+        run_id="run-1",
+        project_id="T2.0",
+        requested_by="user-1",
+        status="QUEUED",
+        evaluator_suite_version="2026-09-10.1",
+        request_payload={},
+        aggregate_scores={},
+        typed_failures=[],
+        created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),
     )
     store.records["run-1"] = record
     try:
-        denied = TestClient(app).put(
-            "/v1/internal/evaluations/run-1", json={"status": "COMPLETED"}
-        )
+        denied = TestClient(app).put("/v1/internal/evaluations/run-1", json={"status": "COMPLETED"})
         accepted = TestClient(app).put(
             "/v1/internal/evaluations/run-1",
             headers={"X-Internal-API-Key": "e" * 32},
             json={
-                "status": "COMPLETED", "phoenixExperimentReference": "experiment-1",
-                "aggregateScores": {"groundedness": 0.95}, "typedFailures": [],
+                "status": "COMPLETED",
+                "phoenixExperimentReference": "experiment-1",
+                "aggregateScores": {"groundedness": 0.95},
+                "typedFailures": [],
             },
         )
     finally:

@@ -18,11 +18,15 @@ class AzureKeyVaultSecretStore:
     async def put_json(self, name: str, value: dict[str, object]) -> str:
         encoded = json.dumps(value, separators=(",", ":"))
         secret = await asyncio.to_thread(self._client.set_secret, name, encoded)
+        if secret.id is None:
+            raise ValueError("Key Vault did not return a secret identifier.")
         return secret.id
 
     async def get_json(self, reference: str) -> dict[str, object]:
         name, version = _secret_identity(reference)
         secret = await asyncio.to_thread(self._client.get_secret, name, version)
+        if secret.value is None:
+            raise ValueError("Key Vault provider secret has no value.")
         decoded = json.loads(secret.value)
         if not isinstance(decoded, dict):
             raise ValueError("Key Vault provider secret is malformed.")

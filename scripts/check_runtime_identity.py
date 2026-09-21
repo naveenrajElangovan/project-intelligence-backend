@@ -36,12 +36,8 @@ async def _run() -> None:
             ).all()
         print(
             {
-                "principals": [
-                    (row.name, row.type_desc) for row in principals
-                ],
-                "memberships": [
-                    (row.role_name, row.member_name) for row in memberships
-                ],
+                "principals": [(row.name, row.type_desc) for row in principals],
+                "memberships": [(row.role_name, row.member_name) for row in memberships],
             }
         )
     finally:

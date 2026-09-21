@@ -19,7 +19,7 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e '.[dev]'
-      - run: make lint format-check PYTHON=python
+      - run: make lint format-check dependencies PYTHON=python
 
   mypy:
     runs-on: ubuntu-latest

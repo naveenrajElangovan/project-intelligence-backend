@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from typing import Any, Literal, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -113,6 +114,7 @@ def _record_values(project: ProjectDefinition) -> dict[str, object]:
             "embeddingField": project.vector_store.embedding_field,
             "embeddingModel": project.vector_store.embedding_model,
             "schemaVersion": project.vector_store.schema_version,
+            "indexedProviders": list(project.vector_store.indexed_providers),
         },
         "ingestion_schedule": {
             "githubMergedPrEnabled": project.ingestion_schedule.github_merged_pr_enabled,
@@ -139,6 +141,10 @@ def _record_values(project: ProjectDefinition) -> dict[str, object]:
 def _project(record: ProjectRecord) -> ProjectDefinition:
     vector_store = record.vector_store or {}
     schedule = record.ingestion_schedule or {}
+    schema_version = str(vector_store.get("schemaVersion") or "3")
+    if schema_version != "3":
+        raise ValueError("VectorStoreRoute supports only vector schema version 3")
+    typed_schema_version = cast(Literal["3"], schema_version)
     return ProjectDefinition(
         project_id=record.project_id,
         display_name=record.display_name,
@@ -152,7 +158,9 @@ def _project(record: ProjectRecord) -> ProjectDefinition:
                 site_url=str(item["siteUrl"]),
                 space_key=str(item["spaceKey"]),
                 space_id=str(item["spaceId"]),
-                root_page_ids=tuple(str(value) for value in item.get("rootPageIds", [])),
+                root_page_ids=tuple(
+                    str(value) for value in cast("list[object]", item.get("rootPageIds", []))
+                ),
             )
             for item in record.confluence_spaces or []
         ),
@@ -160,9 +168,15 @@ def _project(record: ProjectRecord) -> ProjectDefinition:
             GitHubRepositorySource(
                 owner=str(item["owner"]),
                 repository=str(item["repository"]),
-                indexed_branches=tuple(str(value) for value in item.get("indexedBranches", [])),
-                include_paths=tuple(str(value) for value in item.get("includePaths", [])),
-                exclude_paths=tuple(str(value) for value in item.get("excludePaths", [])),
+                indexed_branches=tuple(
+                    str(value) for value in cast("list[object]", item.get("indexedBranches", []))
+                ),
+                include_paths=tuple(
+                    str(value) for value in cast("list[object]", item.get("includePaths", []))
+                ),
+                exclude_paths=tuple(
+                    str(value) for value in cast("list[object]", item.get("excludePaths", []))
+                ),
             )
             for item in record.github_repositories or []
         ),
@@ -171,7 +185,12 @@ def _project(record: ProjectRecord) -> ProjectDefinition:
             text_field=str(vector_store.get("textField") or "chunk_text"),
             embedding_field=str(vector_store.get("embeddingField") or "embedding_text"),
             embedding_model=str(vector_store.get("embeddingModel") or "multilingual-e5-large"),
-            schema_version=str(vector_store.get("schemaVersion") or "3"),
+            schema_version=typed_schema_version,
+            indexed_providers=tuple(
+                str(value).upper()
+                for value in cast("list[object]", vector_store.get("indexedProviders", []))
+                if str(value).upper() in {"JIRA", "GITHUB", "CONFLUENCE"}
+            ),
         ),
         ingestion_schedule=IngestionSchedule(
             github_merged_pr_enabled=bool(schedule.get("githubMergedPrEnabled", True)),
@@ -191,11 +210,13 @@ def _project(record: ProjectRecord) -> ProjectDefinition:
         ),
         retrieval_profile=(
             RetrievalProfile(
-                max_chunks_per_source=int(record.retrieval_profile["maxChunksPerSource"]),
-                rerank_top_n=int(record.retrieval_profile["rerankTopN"]),
-                mixed_source_top_n=int(record.retrieval_profile["mixedSourceTopN"]),
+                max_chunks_per_source=int(
+                    cast(Any, record.retrieval_profile["maxChunksPerSource"])
+                ),
+                rerank_top_n=int(cast(Any, record.retrieval_profile["rerankTopN"])),
+                mixed_source_top_n=int(cast(Any, record.retrieval_profile["mixedSourceTopN"])),
                 rerank_score_threshold=float(
-                    record.retrieval_profile.get("rerankScoreThreshold", 0.10)
+                    cast(Any, record.retrieval_profile.get("rerankScoreThreshold", 0.10))
                 ),
             )
             if record.retrieval_profile

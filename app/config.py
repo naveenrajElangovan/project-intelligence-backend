@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     rag_keepalive_expiry_seconds: float = 30.0
     telemetry_hmac_key: str = ""
     ingestion_internal_api_key: str = ""
+    atlassian_service_url: str = "http://atlassian:8000"
+    atlassian_service_internal_api_key: str = ""
     chat_mongodb_url: str = "mongodb://127.0.0.1:27018"
     chat_mongodb_database: str = "project_intelligence_chat"
     chat_retention_days: int = 30
@@ -172,17 +174,14 @@ class Settings(BaseSettings):
         if not self.allowed_host_list or "*" in self.allowed_host_list:
             errors.append("PI_ALLOWED_HOSTS must contain explicit public hosts")
         if not self.cors_origin_list or any(
-            origin == "*" or not origin.startswith("https://")
-            for origin in self.cors_origin_list
+            origin == "*" or not origin.startswith("https://") for origin in self.cors_origin_list
         ):
             errors.append("PI_CORS_ORIGINS must contain explicit HTTPS origins")
         if not self.atlassian_redirect_uri.startswith("https://"):
             errors.append("PI_ATLASSIAN_REDIRECT_URI must use HTTPS")
         if not self.atlassian_require_email_match:
             errors.append("PI_ATLASSIAN_REQUIRE_EMAIL_MATCH must be true")
-        expected_issuer = (
-            f"https://login.microsoftonline.com/{self.entra_tenant_id}/v2.0"
-        )
+        expected_issuer = f"https://login.microsoftonline.com/{self.entra_tenant_id}/v2.0"
         if self.resolved_entra_issuer != expected_issuer:
             errors.append("PI_ENTRA_ISSUER must match the configured workforce tenant")
         if self.graph_base_url.rstrip("/") != "https://graph.microsoft.com/v1.0":
@@ -203,7 +202,11 @@ class Settings(BaseSettings):
         if self.secret_store_backend != "azure-key-vault":
             errors.append("PI_SECRET_STORE_BACKEND must be azure-key-vault")
         vault = urlsplit(self.key_vault_url)
-        if vault.scheme != "https" or not vault.hostname or not vault.hostname.endswith(".vault.azure.net"):
+        if (
+            vault.scheme != "https"
+            or not vault.hostname
+            or not vault.hostname.endswith(".vault.azure.net")
+        ):
             errors.append("PI_KEY_VAULT_URL must be an Azure Key Vault HTTPS URL")
         if not self.rag_service_url.startswith("https://"):
             errors.append("PI_RAG_SERVICE_URL must use HTTPS")
@@ -218,6 +221,7 @@ class Settings(BaseSettings):
         if errors:
             raise ValueError("Unsafe production configuration: " + "; ".join(errors))
         return self
+
 
 @lru_cache
 def get_settings() -> Settings:

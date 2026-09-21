@@ -18,7 +18,9 @@ _REQUIRED_GRAPH_APPLICATION_PERMISSION = "CustomSecAttributeAssignment.Read.All"
 class GraphProjectAccessReader:
     """Reads server-controlled project authorization attributes from Microsoft Graph."""
 
-    def __init__(self, settings: Settings, http_client: httpx.AsyncClient | None = None, access_store=None) -> None:
+    def __init__(
+        self, settings: Settings, http_client: httpx.AsyncClient | None = None, access_store=None
+    ) -> None:
         self._settings = settings
         self._http_client = http_client
         self._access_token: str | None = None
@@ -179,7 +181,9 @@ def parse_project_access(value: Any, attribute_set_name: str) -> ProjectAccessCo
     return ProjectAccessContext(
         projects=projects,
         project_roles={key: tuple(dict.fromkeys(values)) for key, values in roles.items()},
-        project_departments={key: tuple(dict.fromkeys(values)) for key, values in departments.items()},
+        project_departments={
+            key: tuple(dict.fromkeys(values)) for key, values in departments.items()
+        },
     )
 
 

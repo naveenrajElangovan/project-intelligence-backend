@@ -95,15 +95,58 @@ services:
       PI_INGEST_CONTROL_PLANE_URL: http://api:8000
       PI_INGEST_METRICS_PUSHGATEWAY_URL: ${PI_INGEST_METRICS_PUSHGATEWAY_URL:-http://pushgateway:9091}
       PI_INGEST_CHROMA_HOST: chroma
+      PI_INGEST_LOCAL_EMBEDDING_PATH: /models/multilingual-e5-large
+      PI_INGEST_LOCAL_EMBEDDING_DEVICE: cpu
+      PI_INGEST_STATE_BACKEND: MONGODB
+      PI_INGEST_STATE_MONGODB_URL: ${PI_CHAT_MONGODB_DOCKER_URL:?set authenticated MongoDB URL}
+      PI_INGEST_STATE_MONGODB_DATABASE: project_intelligence_ingestion
+      PI_INGEST_STATE_MONGODB_COLLECTION: manifests
       PI_INGEST_ALLOWED_HOSTS: ${PI_INGEST_RUNTIME_ALLOWED_HOSTS:-ingestion,localhost,127.0.0.1}
+      PI_INGEST_ATLASSIAN_SERVICE_URL: http://atlassian:8000
+      PI_INGEST_ATLASSIAN_SERVICE_INTERNAL_API_KEY: ${PI_ATLASSIAN_SERVICE_INTERNAL_API_KEY:-}
+      PI_INGEST_ATLASSIAN_SERVICE_PRIMARY_ENABLED: ${PI_INGEST_ATLASSIAN_SERVICE_PRIMARY_ENABLED:-true}
+      PI_INGEST_ATLASSIAN_REST_FALLBACK_ENABLED: "true"
     ports:
       - "127.0.0.1:8002:8000"
     restart: unless-stopped
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777
+    volumes:
+      - ../project-intelligence-ingestion/.models/multilingual-e5-large:/models/multilingual-e5-large:ro
     cap_drop: ["ALL"]
     security_opt: ["no-new-privileges:true"]
+    networks: ["application"]
+
+  atlassian:
+    build:
+      context: ../project-intelligence-atlassian
+    image: project-intelligence-atlassian:0.1.0
+    env_file:
+      - path: ../project-intelligence-atlassian/.env
+        required: false
+    environment:
+      PI_ATLASSIAN_ENVIRONMENT: development
+      PI_ATLASSIAN_ACCESS_MODE: READ_ONLY
+      PI_ATLASSIAN_WRITE_ENABLED: "false"
+      PI_ATLASSIAN_INTERNAL_API_KEY: ${PI_ATLASSIAN_SERVICE_INTERNAL_API_KEY:-}
+      PI_ATLASSIAN_BACKEND_URL: http://api:8000
+      PI_ATLASSIAN_INGESTION_URL: http://ingestion:8000
+      PI_ATLASSIAN_BACKEND_INTERNAL_API_KEY: ${PI_INGESTION_INTERNAL_API_KEY:-}
+    ports:
+      - "127.0.0.1:8005:8000"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      api:
+        condition: service_started
+      ingestion:
+        condition: service_healthy
     networks: ["application"]
 
   ingestion-worker:
@@ -155,6 +198,9 @@ services:
       PI_RAG_INTERNAL_API_KEY: ${PI_RAG_INTERNAL_API_KEY:-}
       PI_RAG_OPENINFERENCE_ENABLED: "true"
       PI_RAG_OPENINFERENCE_OTLP_ENDPOINT: http://host.docker.internal:4318/v1/traces
+      PI_RAG_ATLASSIAN_SERVICE_URL: http://atlassian:8000
+      PI_RAG_ATLASSIAN_SERVICE_INTERNAL_API_KEY: ${PI_ATLASSIAN_SERVICE_INTERNAL_API_KEY:-}
+      PI_RAG_ATLASSIAN_LIVE_VERIFICATION_ENABLED: ${PI_RAG_ATLASSIAN_LIVE_VERIFICATION_ENABLED:-false}
     ports:
       - "127.0.0.1:8003:8002"
     restart: unless-stopped

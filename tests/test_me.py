@@ -53,7 +53,7 @@ class _FakeAccessReader:
         assert user_object_id == "entra-object-id"
         return ProjectAccessContext(
             projects=("AAOS",),
-            project_roles={"AAOS": "TECHNICAL_LEAD"},
+            project_roles={"AAOS": ("TECHNICAL_LEAD",)},
             project_departments={"AAOS": ("STORE_OPERATIONS",)},
         )
 
@@ -143,8 +143,8 @@ def test_me_preserves_graph_project_order_instead_of_display_name_order(
             return ProjectAccessContext(
                 projects=graph_projects,
                 project_roles={
-                    "T2.0": "TECHNICAL_LEAD",
-                    "T2.0-STORE": "STORE_USER",
+                    "T2.0": ("TECHNICAL_LEAD",),
+                    "T2.0-STORE": ("STORE_USER",),
                 },
             )
 
@@ -183,6 +183,6 @@ def test_me_preserves_graph_project_order_instead_of_display_name_order(
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert [
-        assignment["projectId"] for assignment in response.json()["assignedProjects"]
-    ] == list(graph_projects)
+    assert [assignment["projectId"] for assignment in response.json()["assignedProjects"]] == list(
+        graph_projects
+    )

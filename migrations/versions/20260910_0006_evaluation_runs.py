@@ -17,7 +17,9 @@ def upgrade() -> None:
     op.create_table(
         "evaluation_runs",
         sa.Column("run_id", sa.String(36), primary_key=True),
-        sa.Column("project_id", sa.String(100), sa.ForeignKey("projects.project_id"), nullable=False),
+        sa.Column(
+            "project_id", sa.String(100), sa.ForeignKey("projects.project_id"), nullable=False
+        ),
         sa.Column("requested_by", sa.String(100), nullable=False),
         sa.Column("status", sa.String(30), nullable=False),
         sa.Column("evaluator_suite_version", sa.String(80), nullable=False),

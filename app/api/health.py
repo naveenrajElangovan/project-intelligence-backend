@@ -82,8 +82,7 @@ async def _verify_database_readiness(settings: Settings) -> None:
         # A cached failure is still a failure: report it rather than pretending
         # the window has not elapsed.
         raise RuntimeError(
-            "The database was unreachable "
-            f"{int(age)}s ago and has not been re-probed yet."
+            f"The database was unreachable {int(age)}s ago and has not been re-probed yet."
         )
     try:
         await _verify_database()

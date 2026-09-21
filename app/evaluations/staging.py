@@ -10,7 +10,7 @@ import json
 from typing import Literal
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 from sqlalchemy.exc import IntegrityError
 
 from app.application.chat_policy import retrieval_policies
@@ -31,7 +31,7 @@ class StagingManifest(BaseModel):
     inventory_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     contract_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     embedding_model: str = Field(min_length=1, max_length=200)
-    schema_version: str = Field(min_length=1, max_length=40)
+    schema_version: Literal["3"]
     cases: list[StagingCase] = Field(min_length=1, max_length=100)
 
     @model_validator(mode="after")
@@ -98,7 +98,10 @@ async def resolve_target(store, target_id: str, project):
         expires_at = expires_at.replace(tzinfo=UTC)
     if expires_at <= datetime.now(UTC):
         raise HTTPException(409, "Evaluation target has expired.")
-    manifest = StagingManifest.model_validate(record.manifest)
+    try:
+        manifest = StagingManifest.model_validate(record.manifest)
+    except ValidationError as exc:
+        raise HTTPException(409, "Evaluation target manifest is invalid.") from exc
     route = project.vector_store
     if (
         not project.active

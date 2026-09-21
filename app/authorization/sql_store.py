@@ -1,4 +1,5 @@
 """SQL mirror of authenticated identities and Graph-authoritative project access."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -35,18 +36,20 @@ class SqlIdentityAccessStore:
                 for key, value in values.items():
                     setattr(record, key, value)
 
-    async def synchronize_access(
-        self, user_id: str, context: ProjectAccessContext
-    ) -> None:
+    async def synchronize_access(self, user_id: str, context: ProjectAccessContext) -> None:
         now = datetime.now(UTC)
         async with self._sessions() as session, session.begin():
-            configured = set(
-                await session.scalars(
-                    select(ProjectRecord.project_id).where(
-                        ProjectRecord.project_id.in_(context.projects)
+            configured = (
+                set(
+                    await session.scalars(
+                        select(ProjectRecord.project_id).where(
+                            ProjectRecord.project_id.in_(context.projects)
+                        )
                     )
                 )
-            ) if context.projects else set()
+                if context.projects
+                else set()
+            )
             existing = {
                 record.project_id: record
                 for record in await session.scalars(

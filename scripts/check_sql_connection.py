@@ -52,9 +52,7 @@ def _check_odbc_driver() -> None:
 
     drivers = pyodbc.drivers()
     if not any("ODBC Driver 18 for SQL Server" == driver for driver in drivers):
-        raise RuntimeError(
-            f"'ODBC Driver 18 for SQL Server' is not installed; found: {drivers}"
-        )
+        raise RuntimeError(f"'ODBC Driver 18 for SQL Server' is not installed; found: {drivers}")
     _ok("odbc driver", "ODBC Driver 18 for SQL Server")
 
 

@@ -51,8 +51,7 @@ def configure_application_logging(level: str) -> None:
     telemetry_logger = logging.getLogger("app.telemetry")
     telemetry_logger.setLevel(_resolve_level(level))
     if not any(
-        handler.get_name() == _TELEMETRY_HANDLER_NAME
-        for handler in telemetry_logger.handlers
+        handler.get_name() == _TELEMETRY_HANDLER_NAME for handler in telemetry_logger.handlers
     ):
         telemetry_handler = logging.StreamHandler()
         telemetry_handler.set_name(_TELEMETRY_HANDLER_NAME)

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Literal
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +35,12 @@ class VectorStoreRoute:
     text_field: str = "chunk_text"
     embedding_field: str = "embedding_text"
     embedding_model: str = "multilingual-e5-large"
-    schema_version: str = "3"
+    schema_version: Literal["3"] = "3"
+    indexed_providers: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.schema_version != "3":
+            raise ValueError("VectorStoreRoute supports only vector schema version 3")
 
 
 @dataclass(frozen=True, slots=True)
